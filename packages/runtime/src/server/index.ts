@@ -1010,7 +1010,7 @@ export function startServer(mux: MuxProvider, extraProviders?: MuxProvider[], wa
     if (!patterns) return undefined;
 
     const raw = shell([
-      "tmux", "list-panes", "-t", sessionName,
+      "tmux", "list-panes", "-s", "-t", sessionName,
       "-F", "#{pane_id}|#{pane_pid}|#{pane_current_command}|#{pane_title}",
     ]);
     if (!raw) return undefined;
@@ -1072,6 +1072,13 @@ export function startServer(mux: MuxProvider, extraProviders?: MuxProvider[], wa
     if (!targetPaneId) return;
 
     log("focus-agent-pane", "focusing", { sessionName, agentName, paneId: targetPaneId });
+
+    // Switch to the window containing the target pane first,
+    // otherwise select-pane alone won't work across windows
+    const windowId = shell(["tmux", "display-message", "-t", targetPaneId, "-p", "#{window_id}"]);
+    if (windowId) {
+      shell(["tmux", "select-window", "-t", windowId.trim()]);
+    }
     shell(["tmux", "select-pane", "-t", targetPaneId]);
 
     const existing = pendingHighlightResets.get(targetPaneId);
