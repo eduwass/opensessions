@@ -1420,6 +1420,13 @@ function SessionCard(props: SessionCardProps) {
     return b.length > 15 ? b.slice(0, 14) + "…" : b;
   };
 
+  const repoName = () => {
+    const d = props.session.dir;
+    if (!d) return "";
+    const parts = d.replace(/\/+$/, "").split("/");
+    return parts[parts.length - 1] || "";
+  };
+
   const portHint = () => {
     const ports = props.session.ports ?? [];
     if (ports.length === 0) return "";
@@ -1485,11 +1492,21 @@ function SessionCard(props: SessionCardProps) {
           {/* Row 2: branch plus a compact local-port hint when available */}
           <Show when={props.session.branch || portHint()}>
             <box flexDirection="row">
-              <Show when={props.session.branch}>
+              <Show when={props.session.branch || repoName()}>
                 <text truncate flexGrow={1}>
-                  <span style={{ fg: props.isFocused ? P().pink : P().overlay0 }}>
-                    {truncBranch()}
-                  </span>
+                  <Show when={repoName()}>
+                    <span style={{ fg: props.isFocused ? P().teal : P().overlay0 }}>
+                      {repoName()}
+                    </span>
+                  </Show>
+                  <Show when={repoName() && props.session.branch}>
+                    <span style={{ fg: P().overlay0 }}>{" · "}</span>
+                  </Show>
+                  <Show when={props.session.branch}>
+                    <span style={{ fg: props.isFocused ? P().pink : P().overlay0 }}>
+                      {truncBranch()}
+                    </span>
+                  </Show>
                 </text>
               </Show>
               <Show when={portHint()}>
