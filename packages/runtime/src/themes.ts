@@ -336,6 +336,22 @@ const TRANSPARENT: Theme = {
   icons: CATPPUCCIN_MOCHA.icons,
 };
 
+const SHADES_OF_PURPLE: Theme = {
+  palette: {
+    blue: "#9EFFFF", lavender: "#B362FF", pink: "#FF628C", mauve: "#A599E9",
+    yellow: "#FAD000", green: "#A5FF90", red: "#EC3A37", peach: "#FF9D00",
+    teal: "#80FFBB", sky: "#9EFFFF", text: "#FFFFFF", subtext0: "#A599E9",
+    subtext1: "#7E74B3", overlay0: "#4D21FC", overlay1: "#6943FF",
+    surface0: "#1E1E3F", surface1: "#222244", surface2: "#2D2B55",
+    base: "transparent", mantle: "transparent", crust: "transparent",
+  },
+  status: {
+    idle: "#4D21FC", running: "#FAD000", done: "#A5FF90",
+    error: "#EC3A37", waiting: "#9EFFFF", interrupted: "#FF9D00",
+  },
+  icons: CATPPUCCIN_MOCHA.icons,
+};
+
 export const BUILTIN_THEMES: Record<string, Theme> = {
   "catppuccin-mocha": CATPPUCCIN_MOCHA,
   "catppuccin-latte": CATPPUCCIN_LATTE,
@@ -356,6 +372,7 @@ export const BUILTIN_THEMES: Record<string, Theme> = {
   "aura": AURA,
   "matrix": MATRIX,
   "transparent": TRANSPARENT,
+  "shades-of-purple": SHADES_OF_PURPLE,
 };
 
 export const DEFAULT_THEME = "catppuccin-mocha";
