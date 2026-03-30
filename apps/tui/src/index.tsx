@@ -443,6 +443,23 @@ function App() {
       const tty = clientTty();
       if (tty) send({ type: "identify", clientTty: tty });
       reIdentify();
+
+      // Report sidebar width on SIGWINCH (terminal resize / pane drag)
+      // Only the TUI in the current session reports — other TUIs' resizes
+      // are always enforcement echoes, never user drags.
+      let lastReportedWidth = renderer.terminalWidth;
+      const onResize = () => {
+        const width = renderer.terminalWidth;
+        if (width !== lastReportedWidth) {
+          lastReportedWidth = width;
+          const my = mySession();
+          const current = currentSession();
+          if (my && current && my !== current) return;
+          send({ type: "report-width", width });
+        }
+      };
+      renderer.on("resize", onResize);
+      onCleanup(() => renderer.removeListener("resize", onResize));
     };
 
     socket.onmessage = (event) => {

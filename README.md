@@ -44,6 +44,16 @@ If you want the same setup as a single shell command:
 grep -q "Ataraxy-Labs/opensessions" ~/.tmux.conf 2>/dev/null || printf '\nset -g @plugin '\''Ataraxy-Labs/opensessions'\''\n' >> ~/.tmux.conf && tmux source-file ~/.tmux.conf && ~/.tmux/plugins/tpm/bin/install_plugins
 ```
 
+## Update
+
+Use TPM's built-in update (`prefix + U`) or run:
+
+```bash
+~/.tmux/plugins/tpm/bin/update_plugins opensessions
+```
+
+The plugin automatically restarts the server on update so it picks up the new code. Toggle the sidebar back on with `prefix o → s` if it was open.
+
 ## Uninstall
 
 Run the uninstall script **before** removing the plugin files — it cleans up tmux hooks, keybindings, sidebar panes, and environment variables that would otherwise persist and cause glitching:

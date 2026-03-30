@@ -370,6 +370,10 @@ export class ZellijProvider implements MuxProviderV1, WindowCapable, SidebarCapa
     // No stash session to clean up in Zellij
   }
 
+  killOrphanedSidebarPanes(): void {
+    // Zellij handles pane lifecycle automatically
+  }
+
   /**
    * Batch pane count retrieval for all sessions.
    * Only the current session can be queried via `zellij action`.

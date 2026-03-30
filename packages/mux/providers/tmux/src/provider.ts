@@ -94,31 +94,32 @@ export class TmuxProvider implements MuxProviderV1, WindowCapable, SidebarCapabl
     // Use | as field separator (safe for session names, window IDs, TTYs)
     const focusCmd = hookPost("/focus", "#{client_tty}|#{session_name}|#{window_id}");
     const refreshCmd = hookPost("/refresh");
-    const resizeCmd = hookPost("/resize-sidebars");
-    const resizePaneCmd = hookPost(
-      "/resize-sidebars",
-      "#{pane_id}|#{session_name}|#{window_id}|#{pane_width}|#{window_width}",
-    );
     const ensureCmd = hookPost("/ensure-sidebar", "#{client_tty}|#{session_name}|#{window_id}");
+
+    const clientResizedCmd = hookPost("/client-resized");
 
     // client-session-changed: update focus AND ensure sidebar in the new session's window
     tmux.setGlobalHook("client-session-changed", `${focusCmd} ; ${ensureCmd}`);
     tmux.setGlobalHook("session-created", refreshCmd);
     tmux.setGlobalHook("session-closed", refreshCmd);
-    tmux.setGlobalHook("client-resized", resizeCmd);
     tmux.setGlobalHook("after-select-window", ensureCmd);
     tmux.setGlobalHook("after-new-window", ensureCmd);
-    tmux.setGlobalHook("after-resize-pane", resizePaneCmd);
+    // client-resized: terminal window changed size — enforce stored width back
+    tmux.setGlobalHook("client-resized", clientResizedCmd);
+    // pane-exited: a pane closed — kill orphaned sidebar panes (only pane left in window)
+    const paneExitedCmd = hookPost("/pane-exited");
+    tmux.setGlobalHook("pane-exited", paneExitedCmd);
   }
 
   cleanupHooks(): void {
     tmux.unsetGlobalHook("client-session-changed");
     tmux.unsetGlobalHook("session-created");
     tmux.unsetGlobalHook("session-closed");
-    tmux.unsetGlobalHook("client-resized");
     tmux.unsetGlobalHook("after-select-window");
     tmux.unsetGlobalHook("after-new-window");
+    tmux.unsetGlobalHook("client-resized");
     tmux.unsetGlobalHook("after-resize-pane");
+    tmux.unsetGlobalHook("pane-exited");
   }
 
   getAllPaneCounts(): Map<string, number> {
@@ -242,5 +243,22 @@ export class TmuxProvider implements MuxProviderV1, WindowCapable, SidebarCapabl
 
   resizeSidebarPane(paneId: string, width: number): void {
     tmux.resizePane(paneId, { width });
+  }
+
+  killOrphanedSidebarPanes(): void {
+    const allPanes = tmux.listPanes();
+    // Count panes per window
+    const windowPaneCounts = new Map<string, number>();
+    for (const p of allPanes) {
+      if (p.sessionName === STASH_SESSION) continue;
+      windowPaneCounts.set(p.windowId, (windowPaneCounts.get(p.windowId) ?? 0) + 1);
+    }
+    // Find sidebar panes that are the only pane in their window
+    for (const p of allPanes) {
+      if (p.title !== SIDEBAR_PANE_TITLE || p.sessionName === STASH_SESSION) continue;
+      if (windowPaneCounts.get(p.windowId) === 1) {
+        tmux.killPane(p.id);
+      }
+    }
   }
 }

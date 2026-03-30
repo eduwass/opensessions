@@ -83,6 +83,8 @@ export interface SidebarCapable {
   hideSidebar(paneId: string): void;
   killSidebarPane(paneId: string): void;
   resizeSidebarPane(paneId: string, width: number): void;
+  /** Kill sidebar panes that are the only pane left in their window (orphaned). */
+  killOrphanedSidebarPanes(): void;
   cleanupSidebar(): void;
 }
 
@@ -124,6 +126,7 @@ export function isSidebarCapable(p: MuxProvider): p is MuxProviderV1 & SidebarCa
     typeof p.hideSidebar === "function" &&
     typeof p.killSidebarPane === "function" &&
     typeof p.resizeSidebarPane === "function" &&
+    typeof p.killOrphanedSidebarPanes === "function" &&
     typeof p.cleanupSidebar === "function"
   );
 }

@@ -58,6 +58,18 @@ bind_global_index_keys() {
 tmux set-environment -g OPENSESSIONS_DIR "$CURRENT_DIR"
 tmux set-environment -g OPENSESSIONS_WIDTH "$WIDTH"
 
+# --- Bootstrap: kill stale server if version or install path changed ---
+VERSION_FILE="/tmp/opensessions.version"
+CURRENT_VERSION="${CURRENT_DIR}:$(grep -o '"version": *"[^"]*"' "$CURRENT_DIR/package.json" 2>/dev/null | head -1 | cut -d'"' -f4)"
+RUNNING_VERSION=""
+[ -f "$VERSION_FILE" ] && RUNNING_VERSION=$(cat "$VERSION_FILE" 2>/dev/null)
+
+if [ "$CURRENT_VERSION" != "$RUNNING_VERSION" ] && [ -f /tmp/opensessions.pid ]; then
+  kill "$(cat /tmp/opensessions.pid)" 2>/dev/null || true
+  rm -f /tmp/opensessions.pid
+fi
+echo -n "$CURRENT_VERSION" > "$VERSION_FILE"
+
 # --- Bootstrap: install deps if needed ---
 if [ ! -d "$CURRENT_DIR/node_modules" ]; then
   BUN_PATH="$(command -v bun 2>/dev/null || echo "$HOME/.bun/bin/bun")"

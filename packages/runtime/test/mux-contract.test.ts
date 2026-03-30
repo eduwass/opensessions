@@ -60,6 +60,7 @@ describe("Mux Contract", () => {
       hideSidebar: () => {},
       killSidebarPane: () => {},
       resizeSidebarPane: () => {},
+      killOrphanedSidebarPanes: () => {},
       cleanupSidebar: () => {},
       listActiveWindows: () => [],
       getCurrentWindowId: () => null,
@@ -101,6 +102,7 @@ describe("Mux Contract", () => {
       hideSidebar: () => {},
       killSidebarPane: () => {},
       resizeSidebarPane: () => {},
+      killOrphanedSidebarPanes: () => {},
       cleanupSidebar: () => {},
       getAllPaneCounts: () => new Map(),
     };
