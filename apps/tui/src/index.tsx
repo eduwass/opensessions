@@ -1211,7 +1211,7 @@ function SessionCard(props: SessionCardProps) {
 
   const paneLabelColor = (pane: PaneData) => {
     if (pane.type === "dev") return P().blue;
-    if (pane.type === "agent") return P().subtext0;
+    if (pane.type === "agent") return P().peach;
     return P().overlay0;
   };
 
