@@ -1245,9 +1245,9 @@ function SessionCard(props: SessionCardProps) {
               const sp = () => props.spacing();
               return (
                 <box flexDirection="column" flexShrink={0}>
-                  {/* 1 blank line between window blocks (always, except first) */}
-                  <Show when={wi() > 0}>
-                    <box height={1} />
+                  {/* Space before window: spacing-based for first, 1 line for rest */}
+                  <Show when={wi() > 0 || sp() > 0}>
+                    <box height={wi() === 0 ? sp() : 1} />
                   </Show>
 
                   {/* Window header: index badge + name */}
@@ -1271,11 +1271,10 @@ function SessionCard(props: SessionCardProps) {
                     {(pane, pi) => {
                       const isLastPane = () => pi() === win.panes.length - 1;
                       const prefix = () => isLastPane() ? "└ " : "├ ";
-
                       return (
                         <box flexDirection="column" flexShrink={0}>
-                          {/* Spacer with │ gutter between panes */}
-                          <Show when={sp() > 0}>
+                          {/* │ gutter spacer between panes (not before first) */}
+                          <Show when={sp() > 0 && pi() > 0}>
                             <For each={Array.from({ length: sp() })}>
                               {() => (
                                 <text><span style={{ fg: P().surface2 }}>{"│"}</span></text>
