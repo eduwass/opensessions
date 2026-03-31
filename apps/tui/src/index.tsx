@@ -1245,9 +1245,9 @@ function SessionCard(props: SessionCardProps) {
               const sp = () => props.spacing();
               return (
                 <box flexDirection="column" flexShrink={0}>
-                  {/* Spacing before window header */}
-                  <Show when={sp() > 0}>
-                    <box height={sp()} />
+                  {/* 1 blank line between window blocks (always, except first) */}
+                  <Show when={wi() > 0}>
+                    <box height={1} />
                   </Show>
 
                   {/* Window header: index + name */}
