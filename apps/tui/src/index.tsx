@@ -1271,15 +1271,14 @@ function SessionCard(props: SessionCardProps) {
                     {(pane, pi) => {
                       const isLastPane = () => pi() === win.panes.length - 1;
                       const prefix = () => isLastPane() ? "└ " : "├ ";
-                      const gutter = () => isLastPane() ? "  " : "│ ";
 
                       return (
                         <box flexDirection="column" flexShrink={0}>
-                          {/* Spacer with gutter between panes */}
-                          <Show when={sp() > 0 && pi() > 0}>
+                          {/* Spacer with │ gutter between panes */}
+                          <Show when={sp() > 0}>
                             <For each={Array.from({ length: sp() })}>
                               {() => (
-                                <text><span style={{ fg: P().surface2 }}>{gutter()}</span></text>
+                                <text><span style={{ fg: P().surface2 }}>{"│"}</span></text>
                               )}
                             </For>
                           </Show>
