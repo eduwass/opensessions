@@ -1359,7 +1359,21 @@ function SessionCard(props: SessionCardProps) {
                     <box height={wi() === 0 ? sp() : 1} />
                   </Show>
 
-                  {/* Window header: index badge + name (click to switch) */}
+                  {/* Window header: index badge + name + status (click to switch) */}
+                  {(() => {
+                    const winHasRunning = () => win.panes.some((p) => isPaneRunning(p));
+                    const winHasUnseen = () => win.panes.some((p) => p.agentUnseen);
+                    const winDot = () => {
+                      if (winHasRunning()) return SPINNERS[props.spinIdx() % SPINNERS.length]!;
+                      if (winHasUnseen()) return "●";
+                      return "";
+                    };
+                    const winDotColor = () => {
+                      if (winHasRunning()) return P().yellow;
+                      if (winHasUnseen()) return P().teal;
+                      return P().surface2;
+                    };
+                    return (
                   <box flexDirection="row"
                     onMouseDown={() => props.onSelectWindow(win.id)}
                   >
@@ -1379,12 +1393,19 @@ function SessionCard(props: SessionCardProps) {
                         </Show>
                       </text>
                     </Show>
-                    <text truncate>
+                    <text truncate flexGrow={1}>
                       <span style={{ fg: win.active ? P().subtext1 : P().overlay0 }}>
                         {props.windowNumbers() ? " " : ""}{win.name}
                       </span>
                     </text>
+                    <Show when={!win.active && winDot()}>
+                      <text flexShrink={0}>
+                        <span style={{ fg: winDotColor() }}>{winDot()}{" "}</span>
+                      </text>
+                    </Show>
                   </box>
+                    );
+                  })()}
 
                   {/* Panes under this window (hidden if collapsed + inactive) */}
                   <Show when={!props.collapseWindows() || win.active}>
