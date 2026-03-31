@@ -12,6 +12,7 @@ import {
   type ClientCommand,
   type Theme,
   type MetadataTone,
+  type ExposedSite,
   SERVER_PORT,
   SERVER_HOST,
   BUILTIN_THEMES,
@@ -177,6 +178,7 @@ function App() {
   const [detailPanelHeight, setDetailPanelHeight] = createSignal(DEFAULT_DETAIL_PANEL_HEIGHT);
   const [isDetailResizeHover, setIsDetailResizeHover] = createSignal(false);
   const [isDetailResizing, setIsDetailResizing] = createSignal(false);
+  const [exposedSites, setExposedSites] = createSignal<ExposedSite[]>([]);
   const detailPanelSessionName = createMemo(() => focusedSession() ?? mySession());
 
   // --- Panel focus: sessions list vs agent detail ---
@@ -485,6 +487,7 @@ function App() {
             setFocusedSession(startupFocus);
             setCurrentSession(msg.currentSession);
             setTheme(resolveTheme(msg.theme));
+            if (msg.exposedSites) setExposedSites(msg.exposedSites);
           } else if (msg.type === "focus") {
             setFocusedSession(msg.focusedSession);
             setCurrentSession(msg.currentSession);
@@ -752,6 +755,53 @@ function App() {
           )}
         </For>
       </scrollbox>
+
+      {/* Exposed sites */}
+      <Show when={(() => {
+        const ports = new Set(focusedData()?.ports ?? []);
+        return exposedSites().filter((s) => ports.has(s.port));
+      })().length > 0}>
+        {(() => {
+          const filteredSites = () => {
+            const ports = new Set(focusedData()?.ports ?? []);
+            return exposedSites().filter((s) => ports.has(s.port));
+          };
+          return (
+        <box flexDirection="column" flexShrink={0} paddingLeft={1} paddingTop={1}>
+          <text>
+            <span style={{ fg: P().overlay1 }}>{"  "}</span>
+            <span style={{ fg: P().subtext0, attributes: BOLD }}>Exposed</span>
+            <span style={{ fg: P().overlay0 }}>{" "}{String(filteredSites().length)}</span>
+          </text>
+          <For each={filteredSites()}>
+            {(site) => {
+              const icon = site.healthy === true ? "󰌊" : site.healthy === false ? "󰌙" : "○";
+              const iconColor = site.healthy === true ? P().green : site.healthy === false ? P().red : P().overlay0;
+              const clickable = !!site.paneId;
+              return (
+                <box flexDirection="column" paddingLeft={3} paddingBottom={0}
+                  onMouseDown={clickable ? () => {
+                    send({ type: "focus-exposed-pane", port: site.port });
+                  } : undefined}
+                >
+                  <text>
+                    <span style={{ fg: iconColor }}>{icon}</span>
+                    <span style={{ fg: P().overlay0 }}>{" "}:{String(site.port)}</span>
+                    <span style={{ fg: !site.paneId ? P().yellow : P().overlay0, attributes: DIM }}>
+                      {!site.paneId && site.origin ? ` 󰚩 ${site.origin}` : !site.paneId && site.healthy !== null ? " orphaned" : ""}
+                    </span>
+                  </text>
+                  <text>
+                    <span style={{ fg: P().blue, attributes: TextAttributes.UNDERLINE }}>{"https://" + site.domain}</span>
+                  </text>
+                </box>
+              );
+            }}
+          </For>
+        </box>
+          );
+        })()}
+      </Show>
 
       {/* Listening ports for focused session — above detail panel */}
       <Show when={focusedData()?.ports?.length}>
@@ -1352,7 +1402,7 @@ function AgentListItem(props: AgentListItemProps) {
 
           {/* Row 2: thread name */}
           <Show when={props.agent.threadName}>
-            <text truncate>
+            <text truncate height={1}>
               <span style={{ fg: isUnseen() ? color() : P().overlay0 }}>{props.agent.threadName}</span>
             </text>
           </Show>

@@ -188,11 +188,7 @@ export class ClaudeCodeAgentWatcher implements AgentWatcher {
         let entry: JournalEntry;
         try { entry = JSON.parse(line); } catch { continue; }
         const customTitle = extractCustomTitle(entry);
-        if (customTitle) threadName = customTitle;
-        else if (!threadName) {
-          const name = extractThreadName(entry);
-          if (name) threadName = name;
-        }
+        if (customTitle) { threadName = customTitle; continue; }
         latestStatus = determineStatus(entry);
         lastEntryIsToolUse = isToolUseEntry(entry);
       }
@@ -225,11 +221,7 @@ export class ClaudeCodeAgentWatcher implements AgentWatcher {
       try { entry = JSON.parse(line); } catch { continue; }
 
       const customTitle = extractCustomTitle(entry);
-      if (customTitle) threadName = customTitle;
-      else if (!threadName) {
-        const name = extractThreadName(entry);
-        if (name) threadName = name;
-      }
+      if (customTitle) { threadName = customTitle; continue; }
 
       latestStatus = determineStatus(entry);
       lastEntryIsToolUse = isToolUseEntry(entry);

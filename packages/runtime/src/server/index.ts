@@ -17,6 +17,7 @@ import {
   type SessionData,
   type ClientCommand,
   type FocusUpdate,
+  type ExposedSite,
   SERVER_PORT,
   SERVER_HOST,
   PID_FILE,
@@ -152,7 +153,7 @@ function refreshPortSnapshot(sessionNames: string[]): boolean {
 
     // 4. Single lsof call for all listening TCP ports
     const lsofResult = Bun.spawnSync(
-      ["/usr/sbin/lsof", "-iTCP", "-sTCP:LISTEN", "-nP", "-F", "pn"],
+      ["lsof", "-iTCP", "-sTCP:LISTEN", "-nP", "-F", "pn"],
       { stdout: "pipe", stderr: "pipe" },
     );
     if (lsofResult.exitCode !== 0) {
@@ -496,8 +497,96 @@ export function startServer(mux: MuxProvider, extraProviders?: MuxProvider[], wa
       focusedSession = sessions.find((s) => s.name === currentSession)?.name ?? sessions[0]!.name;
     }
 
-    return { type: "state", sessions, focusedSession, currentSession, theme: currentTheme, sidebarWidth, ts: Date.now() };
+    return { type: "state", sessions, focusedSession, currentSession, theme: currentTheme, sidebarWidth, exposedSites: cachedExposedSites, ts: Date.now() };
   }
+
+  // --- Exposed sites ---
+
+  const SITES_JSON = join(homedir(), ".config/expose/sites.json");
+  let cachedExposedSites: import("../shared").ExposedSite[] = [];
+
+  const ORIGIN_PATTERNS: [RegExp, string][] = [
+    [/claude/i, "claude"],
+    [/cursor/i, "cursor"],
+    [/\bcode\b|code-server/i, "vscode"],
+    [/\bamp\b/i, "amp"],
+    [/\bcodex\b/i, "codex"],
+  ];
+
+  /** Resolve tmux pane and origin agent for a process listening on a port.
+   *  Walks the parent chain from the listener PID, matching against tmux panes
+   *  and detecting known agent initiators (claude, cursor, vscode, etc). */
+  function resolvePortOwnership(port: number): { paneId: string | null; origin: string | null } {
+    const lsof = shell(["lsof", `-iTCP:${port}`, "-sTCP:LISTEN", "-nP", "-F", "p"]);
+    if (!lsof) return { paneId: null, origin: null };
+    const pidLine = lsof.split("\n").find((l) => l.startsWith("p"));
+    if (!pidLine) return { paneId: null, origin: null };
+    const listenerPid = pidLine.slice(1).trim();
+    if (!listenerPid) return { paneId: null, origin: null };
+
+    // Get all tmux pane PIDs → pane IDs
+    const paneList = shell(["tmux", "list-panes", "-a", "-F", "#{pane_pid} #{pane_id}"]);
+    const panePidToId = new Map<string, string>();
+    if (paneList) {
+      for (const line of paneList.split("\n")) {
+        const [pid, id] = line.trim().split(" ");
+        if (pid && id) panePidToId.set(pid, id);
+      }
+    }
+
+    let paneId: string | null = null;
+    let origin: string | null = null;
+
+    // Walk up parent chain from listener PID
+    let current = listenerPid;
+    for (let depth = 0; depth < 20; depth++) {
+      if (!paneId && panePidToId.has(current)) paneId = panePidToId.get(current)!;
+
+      // Check process args for known initiators
+      if (!origin) {
+        const args = shell(["ps", "-p", current, "-o", "args="]);
+        if (args) {
+          for (const [pat, name] of ORIGIN_PATTERNS) {
+            if (pat.test(args)) { origin = name; break; }
+          }
+        }
+      }
+
+      // If we found both, stop early
+      if (paneId && origin) break;
+
+      const ppid = shell(["ps", "-o", "ppid=", "-p", current]);
+      const next = ppid.trim();
+      if (!next || next === "0" || next === "1" || next === current) break;
+      current = next;
+    }
+    return { paneId, origin };
+  }
+
+  async function refreshExposedSites(): Promise<void> {
+    try {
+      if (!existsSync(SITES_JSON)) { cachedExposedSites = []; return; }
+      const raw = JSON.parse(readFileSync(SITES_JSON, "utf-8"));
+      if (!Array.isArray(raw)) { cachedExposedSites = []; return; }
+      const sites: ExposedSite[] = await Promise.all(
+        raw.map(async (s: any) => {
+          let healthy: boolean | null = null;
+          try {
+            const r = await fetch(`http://127.0.0.1:${s.port}/`, { signal: AbortSignal.timeout(2000) });
+            healthy = r.ok;
+          } catch { healthy = false; }
+          const { paneId, origin } = resolvePortOwnership(s.port);
+          return { name: s.name, port: s.port, domain: s.domain, auth: s.auth ?? "public", healthy, paneId, origin };
+        })
+      );
+      cachedExposedSites = sites;
+    } catch { cachedExposedSites = []; }
+  }
+
+  // Refresh every 15s and on file change
+  refreshExposedSites();
+  setInterval(refreshExposedSites, 15_000);
+  try { watch(SITES_JSON, () => { refreshExposedSites().then(broadcastState); }); } catch {}
 
   let broadcastPending = false;
 
@@ -1010,15 +1099,8 @@ export function startServer(mux: MuxProvider, extraProviders?: MuxProvider[], wa
     return targetPaneId;
   }
 
-  function focusAgentPane(sessionName: string, agentName: string, threadId?: string, threadName?: string): void {
-    log("focus-agent-pane", "received", { sessionName, agentName, threadId, threadName });
-    const targetPaneId = resolveAgentPaneId(sessionName, agentName, threadId, threadName);
-    if (!targetPaneId) return;
-
-    log("focus-agent-pane", "focusing", { sessionName, agentName, paneId: targetPaneId });
-
-    // Switch to the window containing the target pane first,
-    // otherwise select-pane alone won't work across windows
+  /** Focus a tmux pane and flash-highlight it (border + bg), then reset after PANE_HIGHLIGHT_MS. */
+  function focusAndHighlightPane(targetPaneId: string): void {
     const windowId = shell(["tmux", "display-message", "-t", targetPaneId, "-p", "#{window_id}"]);
     if (windowId) {
       shell(["tmux", "select-window", "-t", windowId.trim()]);
@@ -1038,6 +1120,21 @@ export function startServer(mux: MuxProvider, extraProviders?: MuxProvider[], wa
         pendingHighlightResets.delete(targetPaneId);
       }, PANE_HIGHLIGHT_MS),
     );
+  }
+
+  function focusAgentPane(sessionName: string, agentName: string, threadId?: string, threadName?: string): void {
+    log("focus-agent-pane", "received", { sessionName, agentName, threadId, threadName });
+    const targetPaneId = resolveAgentPaneId(sessionName, agentName, threadId, threadName);
+    if (!targetPaneId) return;
+    log("focus-agent-pane", "focusing", { sessionName, agentName, paneId: targetPaneId });
+    focusAndHighlightPane(targetPaneId);
+  }
+
+  function focusExposedPane(port: number): void {
+    const site = cachedExposedSites.find((s) => s.port === port);
+    if (!site?.paneId) return;
+    log("focus-exposed-pane", "focusing", { port, paneId: site.paneId });
+    focusAndHighlightPane(site.paneId);
   }
 
   function killAgentPane(sessionName: string, agentName: string, threadId?: string, threadName?: string): void {
@@ -1161,7 +1258,7 @@ export function startServer(mux: MuxProvider, extraProviders?: MuxProvider[], wa
             try {
               const entry = JSON.parse(line);
 
-              // Prefer custom title from /rename command
+              // Only use custom title from /rename command
               if (entry.type === "custom-title" && entry.customTitle) {
                 threadName = entry.customTitle;
                 continue;
@@ -1169,15 +1266,6 @@ export function startServer(mux: MuxProvider, extraProviders?: MuxProvider[], wa
 
               const msg = entry.message;
               if (!msg?.role) continue;
-
-              // Extract thread name from first user message (fallback)
-              if (!threadName && msg.role === "user") {
-                const content = msg.content;
-                let t: string | undefined;
-                if (typeof content === "string") t = content;
-                else if (Array.isArray(content)) t = content.find((c: any) => c.type === "text" && c.text)?.text;
-                if (t && !t.startsWith("<") && !t.startsWith("{")) threadName = t.slice(0, 80);
-              }
 
               // Determine status from last entry (same logic as ClaudeCodeAgentWatcher)
               if (msg.role === "assistant") {
@@ -1224,7 +1312,7 @@ export function startServer(mux: MuxProvider, extraProviders?: MuxProvider[], wa
 
     const raw = shell([
       "tmux", "list-panes", "-a",
-      "-F", "#{session_name}|#{pane_id}|#{pane_pid}|#{pane_current_command}|#{pane_title}",
+      "-F", "#{session_name}|#{pane_id}|#{pane_pid}|#{pane_current_command}|#{pane_title}|#{window_name}",
     ]);
     if (!raw) return result;
 
@@ -1233,12 +1321,14 @@ export function startServer(mux: MuxProvider, extraProviders?: MuxProvider[], wa
       const idx2 = line.indexOf("|", idx1 + 1);
       const idx3 = line.indexOf("|", idx2 + 1);
       const idx4 = line.indexOf("|", idx3 + 1);
+      const idx5 = line.indexOf("|", idx4 + 1);
       return {
         session: line.slice(0, idx1),
         id: line.slice(idx1 + 1, idx2),
         pid: parseInt(line.slice(idx2 + 1, idx3), 10),
         cmd: line.slice(idx3 + 1, idx4),
-        title: line.slice(idx4 + 1),
+        title: line.slice(idx4 + 1, idx5 === -1 ? undefined : idx5),
+        windowName: idx5 === -1 ? "" : line.slice(idx5 + 1),
       };
     });
 
@@ -1285,12 +1375,16 @@ export function startServer(mux: MuxProvider, extraProviders?: MuxProvider[], wa
           sessionAgents = new Map();
           result.set(pane.session, sessionAgents);
         }
+        // Use pane title as fallback — Claude Code sets it via escape sequences
+        const GENERIC_TITLES = new Set(["pane1", "pane0", ""]);
+        const titleFallback = pane.title.trim() && !GENERIC_TITLES.has(pane.title.trim()) ? pane.title.trim() : undefined;
+
         sessionAgents.set(key, {
           agent: agentName,
           session: pane.session,
           paneId: pane.id,
           threadId,
-          threadName,
+          threadName: threadName || titleFallback,
           status,
           lastSeenTs: now,
         });
@@ -1495,6 +1589,9 @@ export function startServer(mux: MuxProvider, extraProviders?: MuxProvider[], wa
       case "focus-agent-pane":
         log("handleCommand", "focus-agent-pane received", { session: cmd.session, agent: cmd.agent, threadId: cmd.threadId, threadName: cmd.threadName });
         focusAgentPane(cmd.session, cmd.agent, cmd.threadId, cmd.threadName);
+        break;
+      case "focus-exposed-pane":
+        focusExposedPane(cmd.port);
         break;
       case "kill-agent-pane":
         log("handleCommand", "kill-agent-pane received", { session: cmd.session, agent: cmd.agent, threadId: cmd.threadId, threadName: cmd.threadName });

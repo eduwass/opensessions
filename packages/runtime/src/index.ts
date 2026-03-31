@@ -58,4 +58,5 @@ export type {
   MetadataProgress,
   MetadataLogEntry,
   SessionMetadata,
+  ExposedSite,
 } from "./shared";

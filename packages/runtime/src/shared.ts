@@ -25,6 +25,17 @@ export interface SessionData {
   metadata?: SessionMetadata | null;
 }
 
+export interface ExposedSite {
+  name: string;
+  port: number;
+  domain: string;
+  auth: string;
+  healthy: boolean | null;
+  paneId: string | null;
+  /** Who started the process: "claude", "cursor", "vscode", or null if unknown / in a tmux pane */
+  origin: string | null;
+}
+
 export interface ServerState {
   type: "state";
   sessions: SessionData[];
@@ -32,6 +43,7 @@ export interface ServerState {
   currentSession: string | null;
   theme: string | undefined;
   sidebarWidth: number;
+  exposedSites: ExposedSite[];
   ts: number;
 }
 
@@ -112,6 +124,7 @@ export type ClientCommand =
   | { type: "identify-pane"; paneId: string; sessionName: string }
   | { type: "focus-agent-pane"; session: string; agent: string; threadId?: string; threadName?: string }
   | { type: "kill-agent-pane"; session: string; agent: string; threadId?: string; threadName?: string }
+  | { type: "focus-exposed-pane"; port: number }
   | { type: "report-width"; width: number };
 
 // Catppuccin Mocha palette
