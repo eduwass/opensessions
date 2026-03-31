@@ -771,7 +771,7 @@ function App() {
     <box flexDirection="column" flexGrow={1} backgroundColor={P().crust}>
       {/* Session list — the entire sidebar */}
       <Show when={modal() !== "settings" && modal() !== "theme-picker"}>
-      <scrollbox flexGrow={1} flexShrink={1} paddingTop={1}>
+      <scrollbox flexGrow={1} flexShrink={1}>
         <For each={sessions}>
           {(session, i) => (
             <SessionCard
