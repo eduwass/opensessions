@@ -1306,29 +1306,35 @@ export function startServer(mux: MuxProvider, extraProviders?: MuxProvider[], wa
     );
   }
 
-  /** Flash-highlight all panes in a window, then reset after PANE_HIGHLIGHT_MS. */
+  const WINDOW_HIGHLIGHT_MS = 600;
+
+  /** Flash-highlight all panes in a window, then reset after delay. */
   function highlightAllPanesInWindow(sessionName: string, windowId: string): void {
     const raw = shell(["tmux", "list-panes", "-t", `${sessionName}:${windowId}`, "-F", "#{pane_id}\t#{pane_title}"]);
-    if (!raw) return;
+    if (!raw) { log("highlightAllPanes", "no panes found", { sessionName, windowId }); return; }
     const paneIds = raw.split("\n")
       .map((l) => l.split("\t"))
       .filter(([_id, title]) => title !== "sidebar" && title !== "opensessions-sidebar")
       .map(([id]) => id)
       .filter(Boolean);
 
+    log("highlightAllPanes", "highlighting", { paneIds, sessionName, windowId });
+
     for (const paneId of paneIds) {
       const existing = pendingHighlightResets.get(paneId);
       if (existing) clearTimeout(existing);
 
-      shell(["tmux", "select-pane", "-t", paneId, "-P", "bg=#2a2a4a"]);
+      shell(["tmux", "set-option", "-p", "-t", paneId, "pane-border-style", PANE_HIGHLIGHT_BORDER]);
       shell(["tmux", "set-option", "-p", "-t", paneId, "pane-active-border-style", PANE_HIGHLIGHT_BORDER]);
+      shell(["tmux", "select-pane", "-t", paneId, "-P", "bg=#2a2a4a"]);
       pendingHighlightResets.set(
         paneId,
         setTimeout(() => {
+          shell(["tmux", "set-option", "-p", "-t", paneId, "-u", "pane-border-style"]);
           shell(["tmux", "set-option", "-p", "-t", paneId, "-u", "pane-active-border-style"]);
           shell(["tmux", "select-pane", "-t", paneId, "-P", ""]);
           pendingHighlightResets.delete(paneId);
-        }, PANE_HIGHLIGHT_MS),
+        }, WINDOW_HIGHLIGHT_MS),
       );
     }
   }
@@ -1809,11 +1815,14 @@ export function startServer(mux: MuxProvider, extraProviders?: MuxProvider[], wa
         broadcastState();
         break;
       case "select-window":
+        log("select-window", "received", { session: cmd.session, windowId: cmd.windowId });
         try {
           Bun.spawnSync(["tmux", "select-window", "-t", `${cmd.session}:${cmd.windowId}`], { stdout: "pipe", stderr: "pipe" });
           highlightAllPanesInWindow(cmd.session, cmd.windowId);
           broadcastState();
-        } catch {}
+        } catch (err) {
+          log("select-window", "error", { error: String(err) });
+        }
         break;
       case "kill-agent-pane":
         log("handleCommand", "kill-agent-pane received", { session: cmd.session, agent: cmd.agent, threadId: cmd.threadId, threadName: cmd.threadName });
