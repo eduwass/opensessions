@@ -138,24 +138,31 @@ let portSnapshot = new Map<string, number[]>();
 function refreshPortSnapshot(sessionNames: string[]): boolean {
   try {
     // 1. Gather pane PIDs + IDs + cwds for all sessions in one tmux call per session
+    //    Also fetch pane_title to filter out sidebar panes from worktree grouping
     const panePidsBySession = new Map<string, number[]>();
     const nextPaneDirs = new Map<string, PaneDirEntry[]>();
     const pidToPaneId = new Map<number, string>();
     for (const name of sessionNames) {
       const r = Bun.spawnSync(
-        ["tmux", "list-panes", "-s", "-t", name, "-F", "#{pane_pid}\t#{pane_id}\t#{pane_current_path}"],
+        ["tmux", "list-panes", "-s", "-t", name, "-F", "#{pane_pid}\t#{pane_id}\t#{pane_current_path}\t#{pane_title}"],
         { stdout: "pipe", stderr: "pipe" },
       );
       const lines = r.stdout.toString().trim().split("\n").filter(Boolean);
       const pids: number[] = [];
       const entries: PaneDirEntry[] = [];
       for (const line of lines) {
-        const [pidStr, paneId, cwd] = line.split("\t");
+        const parts = line.split("\t");
+        const pidStr = parts[0];
+        const paneId = parts[1];
+        const cwd = parts[2];
+        const title = parts[3] ?? "";
         const pid = parseInt(pidStr, 10);
         if (isNaN(pid) || !paneId) continue;
         pids.push(pid);
         pidToPaneId.set(pid, paneId);
-        if (cwd) entries.push({ paneId, pid, cwd });
+        // Exclude sidebar panes from worktree dir grouping
+        const isSidebar = title === "sidebar" || title === "opensessions-sidebar";
+        if (cwd && !isSidebar) entries.push({ paneId, pid, cwd });
       }
       if (pids.length > 0) panePidsBySession.set(name, pids);
       if (entries.length > 0) nextPaneDirs.set(name, entries);
