@@ -1327,7 +1327,7 @@ function SessionCard(props: SessionCardProps) {
                     {(pane, pi) => {
                       const isLastPane = () => pi() === win.panes.length - 1;
                       const tl = () => props.treeLines();
-                      const prefix = () => tl() ? (isLastPane() ? "└ " : "├ ") : "";
+                      const prefix = () => tl() ? (isLastPane() ? "└ " : "├ ") : "  ";
                       return (
                         <box flexDirection="column" flexShrink={0}>
                           {/* spacer before each pane (including first — gap from window header) */}
