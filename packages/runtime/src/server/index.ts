@@ -659,15 +659,28 @@ export function startServer(mux: MuxProvider, extraProviders?: MuxProvider[], wa
       const agents = mergeAgentsWithPanePresence(name, tracker.getAgents(name));
       const windowData = buildWindowData(name, ports, agents, cachedExposedSites);
 
+      // Propagate unmatched unseen agents to panes that look done but have no unseen flag
+      // This handles the case where the tracker can't match its paneId to a specific pane
+      const hasUnmatchedUnseen = agents.some((a) => a.unseen && !a.paneId);
+      if (hasUnmatchedUnseen) {
+        const DONE_TITLE_RE = /^[✳✱]/;
+        for (const win of windowData) {
+          for (const pane of win.panes) {
+            if (pane.type === "agent" && !pane.agentUnseen && !pane.active && DONE_TITLE_RE.test(pane.title)) {
+              pane.agentUnseen = true;
+            }
+          }
+        }
+      }
+
       // Auto-clear unseen when pane is actively focused (any navigation method)
       if (name === currentSession) {
         for (const win of windowData) {
           for (const pane of win.panes) {
             if (pane.active && pane.agentUnseen) {
-              tracker.markSeenInstance(name, pane.command, undefined);
-              // Also try matching by paneId in the agents list
+              // Clear all possible unseen matches for this pane
               for (const a of agents) {
-                if (a.paneId === pane.id && a.unseen) {
+                if (a.unseen && (a.paneId === pane.id || !a.paneId)) {
                   tracker.markSeenInstance(name, a.agent, a.threadId);
                 }
               }
