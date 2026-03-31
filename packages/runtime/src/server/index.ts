@@ -678,9 +678,9 @@ export function startServer(mux: MuxProvider, extraProviders?: MuxProvider[], wa
         for (const win of windowData) {
           for (const pane of win.panes) {
             if (pane.active && pane.agentUnseen) {
-              // Clear all possible unseen matches for this pane
+              // Clear unseen for agents that match this specific pane
               for (const a of agents) {
-                if (a.unseen && (a.paneId === pane.id || !a.paneId)) {
+                if (a.unseen && a.paneId === pane.id) {
                   tracker.markSeenInstance(name, a.agent, a.threadId);
                 }
               }
@@ -1862,10 +1862,15 @@ export function startServer(mux: MuxProvider, extraProviders?: MuxProvider[], wa
             const clientTty = clientTtys.get(ws) ?? undefined;
             provider.switchSession(cmd.session, clientTty);
           }
-          // Mark agent in this pane as seen
+          // Mark agents in this pane as seen (both matched and unmatched)
           const sessionAgents = tracker.getAgents(cmd.session);
+          // Get the pane title to match unmatched agents
+          const paneTitle = shell(["tmux", "display-message", "-t", cmd.paneId, "-p", "#{pane_title}"]);
           for (const agent of sessionAgents) {
-            if (agent.paneId === cmd.paneId && agent.unseen) {
+            if (!agent.unseen) continue;
+            if (agent.paneId === cmd.paneId) {
+              tracker.markSeenInstance(cmd.session, agent.agent, agent.threadId);
+            } else if (!agent.paneId && paneTitle && agent.threadName && paneTitle.includes(agent.threadName.replace(/^[✳✱\s]+/, ""))) {
               tracker.markSeenInstance(cmd.session, agent.agent, agent.threadId);
             }
           }
