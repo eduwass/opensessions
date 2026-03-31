@@ -1235,8 +1235,12 @@ function SessionCard(props: SessionCardProps) {
   const windowData = () => props.session.windowData ?? [];
 
   // Pane rendering helpers
+  const BRAILLE_SPINNER_RE = /[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏⠐⠑⠒⠓⠔⠕⠖⠗⠘⠚⠛⠜⠝⠞⠟⠠⠡⠢⠣⠤⠥⠨⠩⠪⠫⠬⠭⠮⠯⠰⠱⠲⠳⠵⠶⠷⠺⠻⠾⠿]/;
+  const isPaneRunning = (pane: PaneData) =>
+    pane.agentStatus === "running" || (pane.type === "agent" && BRAILLE_SPINNER_RE.test(pane.title));
+
   const paneDot = (pane: PaneData) => {
-    if (pane.type === "agent" && pane.agentStatus === "running")
+    if (pane.type === "agent" && isPaneRunning(pane))
       return SPINNERS[props.spinIdx() % SPINNERS.length]!;
     if (pane.type === "agent") return "●";
     if (pane.type === "dev") return "●";
@@ -1248,9 +1252,8 @@ function SessionCard(props: SessionCardProps) {
     if (pane.active) return P().green;
     // Inactive: dim/muted
     if (pane.type === "agent") {
-      const s = pane.agentStatus;
-      if (s === "running") return P().yellow;
-      if (s === "error") return P().red;
+      if (isPaneRunning(pane)) return P().yellow;
+      if (pane.agentStatus === "error") return P().red;
       if (pane.agentUnseen) return P().teal;
       return P().surface2;
     }
