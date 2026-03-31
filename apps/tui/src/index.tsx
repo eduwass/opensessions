@@ -1263,15 +1263,17 @@ function SessionCard(props: SessionCardProps) {
   const TERMINAL_STATUSES = new Set(["done", "error", "interrupted"]);
   const isPaneRunning = (pane: PaneData) => {
     if (pane.agentStatus && TERMINAL_STATUSES.has(pane.agentStatus)) return false;
+    if (pane.agentStatus === "waiting") return false;
     return pane.agentStatus === "running" || (pane.type === "agent" && BRAILLE_RE.test(pane.title.charAt(0)));
   };
+
+  const isPaneWaiting = (pane: PaneData) =>
+    pane.type === "agent" && pane.agentStatus === "waiting";
 
   const paneDot = (pane: PaneData) => {
     if (pane.type === "agent") {
       if (isPaneRunning(pane)) return SPINNERS[props.spinIdx() % SPINNERS.length]!;
-      if (pane.agentStatus === "done") return "●";
-      if (pane.agentStatus === "error") return "●";
-      if (pane.agentStatus === "interrupted") return "●";
+      if (isPaneWaiting(pane)) return "◉";
       return "●";
     }
     if (pane.type === "dev") return "●";
@@ -1282,7 +1284,7 @@ function SessionCard(props: SessionCardProps) {
     if (pane.active) return P().green;
     if (pane.type === "agent") {
       if (isPaneRunning(pane)) return P().yellow;
-      // Unseen takes priority over done/error — it's the "needs attention" state
+      if (isPaneWaiting(pane)) return P().blue;
       if (pane.agentUnseen) return P().teal;
       if (pane.agentStatus === "error") return P().red;
       return P().surface2;
@@ -1311,6 +1313,7 @@ function SessionCard(props: SessionCardProps) {
 
   const paneLabelColor = (pane: PaneData) => {
     if (pane.active) return P().green;
+    if (pane.type === "agent" && isPaneWaiting(pane)) return P().blue;
     if (pane.type === "agent" && pane.agentUnseen) return P().teal;
     return P().overlay0;
   };
@@ -1362,14 +1365,17 @@ function SessionCard(props: SessionCardProps) {
                   {/* Window header: index badge + name + status (click to switch) */}
                   {(() => {
                     const winHasRunning = () => win.panes.some((p) => isPaneRunning(p));
+                    const winHasWaiting = () => win.panes.some((p) => isPaneWaiting(p));
                     const winHasUnseen = () => win.panes.some((p) => p.agentUnseen);
                     const winDot = () => {
                       if (winHasRunning()) return SPINNERS[props.spinIdx() % SPINNERS.length]!;
+                      if (winHasWaiting()) return "◉";
                       if (winHasUnseen()) return "●";
                       return "";
                     };
                     const winDotColor = () => {
                       if (winHasRunning()) return P().yellow;
+                      if (winHasWaiting()) return P().blue;
                       if (winHasUnseen()) return P().teal;
                       return P().surface2;
                     };
@@ -1434,7 +1440,7 @@ function SessionCard(props: SessionCardProps) {
                             <text truncate>
                               <span style={{ fg: P().surface2 }}>{prefix()}</span>
                               <span style={{ fg: paneDotColor(pane) }}>{paneDot(pane)}</span>
-                              <span style={{ fg: paneLabelColor(pane), attributes: pane.active ? BOLD : (pane.agentUnseen ? undefined : DIM) }}>
+                              <span style={{ fg: paneLabelColor(pane), attributes: pane.active ? BOLD : (pane.agentUnseen || isPaneWaiting(pane) ? undefined : DIM) }}>
                                 {" "}{paneLabel(pane)}
                               </span>
                             </text>
