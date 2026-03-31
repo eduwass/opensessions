@@ -812,6 +812,7 @@ function App() {
           </text>
         </box>
       </scrollbox>
+      </Show>
 
       {/* Settings button — pinned to bottom */}
       <Show when={modal() !== "settings" && modal() !== "theme-picker"}>
