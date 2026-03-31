@@ -750,6 +750,7 @@ function App() {
   return (
     <box flexDirection="column" flexGrow={1} backgroundColor={P().crust}>
       {/* Session list — the entire sidebar */}
+      <Show when={modal() !== "settings" && modal() !== "theme-picker"}>
       <scrollbox flexGrow={1} flexShrink={1} paddingTop={1}>
         <For each={sessions}>
           {(session, i) => (
@@ -784,8 +785,10 @@ function App() {
           )}
         </For>
       </scrollbox>
+      </Show>
 
       {/* Settings button — pinned to bottom */}
+      <Show when={modal() !== "settings" && modal() !== "theme-picker"}>
       <box flexShrink={0} paddingLeft={2} paddingBottom={1} paddingTop={0}>
         <box height={1}>
           <text style={{ fg: P().surface2 }}>{"─".repeat(200)}</text>
@@ -795,6 +798,7 @@ function App() {
           <span style={{ fg: P().overlay0, attributes: DIM }}>{"settings"}</span>
         </text>
       </box>
+      </Show>
 
       {/* Theme picker overlay */}
       <Show when={modal() === "theme-picker"}>
@@ -1302,9 +1306,12 @@ function SessionCard(props: SessionCardProps) {
 
       {/* Folder · branch (always shown when available) */}
       <Show when={collapsedInfo()}>
-        <box paddingLeft={3}>
+        <box paddingLeft={1}
+          backgroundColor={props.isFocused && props.highlightSession() ? P().surface0 : undefined}
+        >
+          <text style={{ fg: accentColor() }}>{accentColor() === "transparent" ? " " : "▌"}</text>
           <text truncate>
-            <span style={{ fg: P().overlay0, attributes: DIM }}>{collapsedInfo()}</span>
+            <span style={{ fg: P().overlay0, attributes: DIM }}>{" "}{collapsedInfo()}</span>
           </text>
         </box>
       </Show>
