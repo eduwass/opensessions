@@ -1435,6 +1435,38 @@ export function startServer(mux: MuxProvider, extraProviders?: MuxProvider[], wa
     }
   }
 
+  /** Flash unseen panes in the current window (if any). Called on window switch. */
+  function flashUnseenInCurrentWindow(): void {
+    const session = getCachedCurrentSession();
+    if (!session) return;
+    const winId = shell(["tmux", "display-message", "-p", "#{window_id}"]);
+    if (!winId) return;
+    const raw = shell(["tmux", "list-panes", "-t", `${session}:${winId.trim()}`, "-F", "#{pane_id}\t#{pane_title}\t#{pane_active}"]);
+    if (!raw) return;
+
+    const DONE_TITLE = /^[✳✱]/;
+    let flashed = false;
+    for (const line of raw.split("\n")) {
+      const [paneId, title, active] = line.split("\t");
+      if (!paneId || active === "1") continue;
+      if (DONE_TITLE.test(title ?? "") && !seenPanes.has(paneId)) {
+        // This pane has unseen output — flash it
+        const existing = pendingHighlightResets.get(paneId);
+        if (existing) clearTimeout(existing);
+        shell(["tmux", "set-option", "-p", "-t", paneId, "pane-border-style", PANE_HIGHLIGHT_BORDER]);
+        shell(["tmux", "set-option", "-p", "-t", paneId, "pane-active-border-style", PANE_HIGHLIGHT_BORDER]);
+        shell(["tmux", "select-pane", "-t", paneId, "-P", "bg=#2a2a4a"]);
+        pendingHighlightResets.set(paneId, setTimeout(() => {
+          shell(["tmux", "set-option", "-p", "-t", paneId, "-u", "pane-border-style"]);
+          shell(["tmux", "set-option", "-p", "-t", paneId, "-u", "pane-active-border-style"]);
+          shell(["tmux", "select-pane", "-t", paneId, "-P", ""]);
+          pendingHighlightResets.delete(paneId);
+        }, WINDOW_HIGHLIGHT_MS));
+        flashed = true;
+      }
+    }
+  }
+
   function focusAgentPane(sessionName: string, agentName: string, threadId?: string, threadName?: string): void {
     log("focus-agent-pane", "received", { sessionName, agentName, threadId, threadName });
     const targetPaneId = resolveAgentPaneId(sessionName, agentName, threadId, threadName);
@@ -1934,7 +1966,7 @@ export function startServer(mux: MuxProvider, extraProviders?: MuxProvider[], wa
       case "select-window":
         try {
           Bun.spawnSync(["tmux", "select-window", "-t", `${cmd.session}:${cmd.windowId}`], { stdout: "pipe", stderr: "pipe" });
-          highlightAllPanesInWindow(cmd.session, cmd.windowId);
+          flashUnseenInCurrentWindow();
           broadcastState();
         } catch {}
         break;
@@ -2009,6 +2041,7 @@ export function startServer(mux: MuxProvider, extraProviders?: MuxProvider[], wa
       const url = new URL(req.url);
 
       if (req.method === "POST" && url.pathname === "/refresh") {
+        flashUnseenInCurrentWindow();
         broadcastState();
         return new Response("ok", { status: 200 });
       }
