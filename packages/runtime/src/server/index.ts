@@ -338,8 +338,13 @@ function buildWindowData(
 
   // Build paneId→agent mapping
   const agentByPane = new Map<string, AgentEvent>();
+  const unmatchedAgents: AgentEvent[] = [];
   for (const agent of sessionAgents) {
-    if (agent.paneId) agentByPane.set(agent.paneId, agent);
+    if (agent.paneId) {
+      agentByPane.set(agent.paneId, agent);
+    } else {
+      unmatchedAgents.push(agent);
+    }
   }
 
   // Build port→exposedSite mapping
@@ -348,27 +353,53 @@ function buildWindowData(
     exposedByPort.set(site.port, site);
   }
 
+  // Sort unmatched agents by priority: running/waiting > done > idle
+  const STATUS_PRIO: Record<string, number> = { running: 5, waiting: 4, error: 3, interrupted: 2, done: 1, idle: 0 };
+  unmatchedAgents.sort((a, b) => (STATUS_PRIO[b.status] ?? 0) - (STATUS_PRIO[a.status] ?? 0));
+
   // Build WindowData[]
+  const usedUnmatched = new Set<AgentEvent>();
   const result: import("../shared").WindowData[] = [];
   for (const win of windowsList) {
     const rawPanes = panesByWindow.get(win.id) ?? [];
     const panes: import("../shared").PaneData[] = [];
 
     for (const pane of rawPanes) {
-      const agent = agentByPane.get(pane.id);
+      let agent = agentByPane.get(pane.id);
       const port = portByPane.get(pane.id);
       const exposed = port != null ? exposedByPort.get(port) : undefined;
+      const isAgentCmd = AGENT_COMMANDS.has(pane.command.toLowerCase());
+
+      // If no matched agent but pane looks like an agent, try matching unmatched agents
+      // Match by threadName containing the pane title (stripped of prefix)
+      if (!agent && isAgentCmd) {
+        const cleanTitle = pane.title.replace(/^[\u2800-\u28FF✳✱\s]+/, "").trim();
+        for (const ua of unmatchedAgents) {
+          if (usedUnmatched.has(ua)) continue;
+          const cleanThread = (ua.threadName ?? "").replace(/^[\u2800-\u28FF✳✱\s]+/, "").trim();
+          if (cleanTitle && cleanThread && cleanTitle === cleanThread) {
+            agent = ua;
+            usedUnmatched.add(ua);
+            break;
+          }
+        }
+        // Still no match? Use the highest-priority unmatched agent
+        if (!agent) {
+          for (const ua of unmatchedAgents) {
+            if (usedUnmatched.has(ua)) continue;
+            agent = ua;
+            usedUnmatched.add(ua);
+            break;
+          }
+        }
+      }
 
       // Determine pane type
       let type: "agent" | "dev" | "shell" = "shell";
-      if (agent) {
+      if (agent || isAgentCmd) {
         type = "agent";
       } else if (port != null) {
         type = "dev";
-      } else {
-        // Check if command looks like an agent
-        const cmd = pane.command.toLowerCase();
-        if (AGENT_COMMANDS.has(cmd)) type = "agent";
       }
 
       panes.push({
