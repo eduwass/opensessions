@@ -116,6 +116,11 @@ export class AgentTracker {
     return true;
   }
 
+  markSeenInstance(session: string, agent: string, threadId?: string): void {
+    const key = instanceKey(agent, threadId);
+    this.unseenInstances.delete(this.unseenKey(session, key));
+  }
+
   dismiss(session: string, agent: string, threadId?: string): boolean {
     const sessionInstances = this.instances.get(session);
     if (!sessionInstances) return false;
@@ -188,19 +193,8 @@ export class AgentTracker {
   handleFocus(session: string): boolean {
     this.active.clear();
     this.active.add(session);
-
-    const hadUnseen = this.isUnseen(session);
-    if (hadUnseen) {
-      // Clear unseen flags — keep terminal instances visible (as "seen")
-      // pruneTerminal will clean them up after timeout
-      const sessionInstances = this.instances.get(session);
-      if (sessionInstances) {
-        for (const key of sessionInstances.keys()) {
-          this.unseenInstances.delete(this.unseenKey(session, key));
-        }
-      }
-    }
-    return hadUnseen;
+    // Don't clear unseen here — let pane-level focus handle it
+    return this.isUnseen(session);
   }
 
   setActiveSessions(sessions: string[]): void {

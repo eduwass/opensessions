@@ -1195,22 +1195,11 @@ function SessionCard(props: SessionCardProps) {
 
   const accentColor = () => {
     if (props.isCurrent) return P().green;
-    if (isUnseenTerminal()) {
-      const s = status();
-      if (s === "error") return P().red;
-      if (s === "interrupted") return P().peach;
-      return P().teal;
-    }
-    const s = status();
-    if (s === "error") return P().red;
-    if (s === "interrupted") return P().peach;
-    if (s === "running") return P().yellow;
     if (props.isFocused) return P().lavender;
     return "transparent";
   };
 
   const accentChar = () => {
-    if (unseen() && !props.isFocused) return "●";
     if (accentColor() === "transparent") return " ";
     return "▌";
   };
@@ -1223,19 +1212,25 @@ function SessionCard(props: SessionCardProps) {
   const TERMINAL_STATUSES_SESSION = new Set(["done", "error", "interrupted"]);
   const isSessionRunning = () => status() === "running" || hasRunningPane();
 
+  // Check if any pane in this session has unseen output
+  const hasUnseenPane = () =>
+    (props.session.windowData ?? []).some((w) =>
+      w.panes.some((p) => p.agentUnseen)
+    );
+
   const statusDot = () => {
     if (isSessionRunning()) return SPINNERS[props.spinIdx() % SPINNERS.length]!;
+    if (hasUnseenPane()) return "●";
     const s = status();
-    if (["done", "error", "interrupted"].includes(s)) return "●";
+    if (s === "error") return "●";
     return "";
   };
 
   const statusDotColor = () => {
     if (isSessionRunning()) return P().yellow;
+    if (hasUnseenPane()) return P().teal;
     const s = status();
-    if (s === "done") return P().green;
     if (s === "error") return P().red;
-    if (s === "interrupted") return P().peach;
     return P().surface2;
   };
 
