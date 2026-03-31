@@ -7,6 +7,18 @@ export const PID_FILE = "/tmp/opensessions.pid";
 export const SERVER_IDLE_TIMEOUT_MS = 30_000;
 export const STUCK_RUNNING_TIMEOUT_MS = 3 * 60 * 1000;
 
+export interface WorktreeContext {
+  dir: string;
+  folderName: string;
+  branch: string;
+  dirty: boolean;
+  isWorktree: boolean;
+  diffStats: { added: number; removed: number } | null;
+  ports: number[];
+  agents: AgentEvent[];
+  exposedSites: ExposedSite[];
+}
+
 export interface SessionData {
   name: string;
   createdAt: number;
@@ -23,6 +35,7 @@ export interface SessionData {
   agents: AgentEvent[];
   eventTimestamps: number[];
   metadata?: SessionMetadata | null;
+  worktrees: WorktreeContext[];
 }
 
 export interface ExposedSite {

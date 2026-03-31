@@ -47,6 +47,7 @@ export {
 } from "./shared";
 export type {
   SessionData,
+  WorktreeContext,
   ServerState,
   FocusUpdate,
   ResizeNotify,

@@ -15,6 +15,7 @@ import {
 import {
   type ServerState,
   type SessionData,
+  type WorktreeContext,
   type ClientCommand,
   type FocusUpdate,
   type ExposedSite,
@@ -88,6 +89,46 @@ function invalidateGitCache(dir?: string) {
   else gitInfoCache.clear();
 }
 
+// --- Git diff stats ---
+
+interface DiffStats { added: number; removed: number }
+const diffStatsCache = new Map<string, { stats: DiffStats | null; ts: number }>();
+const DIFF_STATS_CACHE_TTL_MS = 5000;
+
+function getDiffStats(dir: string): DiffStats | null {
+  if (!dir) return null;
+  const cached = diffStatsCache.get(dir);
+  if (cached && Date.now() - cached.ts < DIFF_STATS_CACHE_TTL_MS) return cached.stats;
+
+  const out = shell(["sh", "-c", `cd "${dir}" 2>/dev/null && git diff --shortstat 2>/dev/null`]);
+  if (!out) {
+    diffStatsCache.set(dir, { stats: null, ts: Date.now() });
+    return null;
+  }
+  let added = 0, removed = 0;
+  const addMatch = out.match(/(\d+) insertion/);
+  const delMatch = out.match(/(\d+) deletion/);
+  if (addMatch) added = parseInt(addMatch[1], 10);
+  if (delMatch) removed = parseInt(delMatch[1], 10);
+  const stats = (added > 0 || removed > 0) ? { added, removed } : null;
+  diffStatsCache.set(dir, { stats, ts: Date.now() });
+  return stats;
+}
+
+// --- Pane directory snapshot ---
+
+interface PaneDirEntry {
+  paneId: string;
+  pid: number;
+  cwd: string;
+}
+
+/** Maps sessionName → pane entries with cwd info */
+let paneDirSnapshot = new Map<string, PaneDirEntry[]>();
+
+/** Maps port → paneId that owns the listening process */
+let portToPaneSnapshot = new Map<number, string>();
+
 // --- Port detection ---
 
 // Global port snapshot — refreshed by the port poll timer, read by computeState.
@@ -96,20 +137,35 @@ let portSnapshot = new Map<string, number[]>();
 
 function refreshPortSnapshot(sessionNames: string[]): boolean {
   try {
-    // 1. Gather pane PIDs for all sessions in one tmux call per session
-    //    (tmux doesn't support multi-session list-panes, so we batch via a single format string)
+    // 1. Gather pane PIDs + IDs + cwds for all sessions in one tmux call per session
     const panePidsBySession = new Map<string, number[]>();
+    const nextPaneDirs = new Map<string, PaneDirEntry[]>();
+    const pidToPaneId = new Map<number, string>();
     for (const name of sessionNames) {
       const r = Bun.spawnSync(
-        ["tmux", "list-panes", "-s", "-t", name, "-F", "#{pane_pid}"],
+        ["tmux", "list-panes", "-s", "-t", name, "-F", "#{pane_pid}\t#{pane_id}\t#{pane_current_path}"],
         { stdout: "pipe", stderr: "pipe" },
       );
-      const pids = r.stdout.toString().trim().split("\n").filter(Boolean).map(Number).filter((n) => !isNaN(n));
+      const lines = r.stdout.toString().trim().split("\n").filter(Boolean);
+      const pids: number[] = [];
+      const entries: PaneDirEntry[] = [];
+      for (const line of lines) {
+        const [pidStr, paneId, cwd] = line.split("\t");
+        const pid = parseInt(pidStr, 10);
+        if (isNaN(pid) || !paneId) continue;
+        pids.push(pid);
+        pidToPaneId.set(pid, paneId);
+        if (cwd) entries.push({ paneId, pid, cwd });
+      }
       if (pids.length > 0) panePidsBySession.set(name, pids);
+      if (entries.length > 0) nextPaneDirs.set(name, entries);
     }
+
+    paneDirSnapshot = nextPaneDirs;
 
     if (panePidsBySession.size === 0) {
       portSnapshot = new Map();
+      portToPaneSnapshot = new Map();
       return false;
     }
 
@@ -128,26 +184,30 @@ function refreshPortSnapshot(sessionNames: string[]): boolean {
     }
 
     // 3. BFS from pane PIDs to get full descendant tree per session
-    //    Also build a reverse map: pid → session name(s)
+    //    Also track which pane PID each descendant belongs to (for port→pane mapping)
     const pidToSessions = new Map<number, string[]>();
+    const pidToRootPane = new Map<number, number>();
     for (const [name, panePids] of panePidsBySession) {
-      const allPids = new Set<number>(panePids);
-      const queue = [...panePids];
-      while (queue.length > 0) {
-        const pid = queue.pop()!;
-        const kids = childrenOf.get(pid);
-        if (!kids) continue;
-        for (const kid of kids) {
-          if (!allPids.has(kid)) {
-            allPids.add(kid);
-            queue.push(kid);
+      for (const rootPid of panePids) {
+        const queue = [rootPid];
+        const visited = new Set<number>([rootPid]);
+        pidToRootPane.set(rootPid, rootPid);
+        while (queue.length > 0) {
+          const pid = queue.pop()!;
+          let arr = pidToSessions.get(pid);
+          if (!arr) { arr = []; pidToSessions.set(pid, arr); }
+          if (!arr.includes(name)) arr.push(name);
+
+          const kids = childrenOf.get(pid);
+          if (!kids) continue;
+          for (const kid of kids) {
+            if (!visited.has(kid)) {
+              visited.add(kid);
+              pidToRootPane.set(kid, rootPid);
+              queue.push(kid);
+            }
           }
         }
-      }
-      for (const pid of allPids) {
-        let arr = pidToSessions.get(pid);
-        if (!arr) { arr = []; pidToSessions.set(pid, arr); }
-        arr.push(name);
       }
     }
 
@@ -161,8 +221,9 @@ function refreshPortSnapshot(sessionNames: string[]): boolean {
       return false;
     }
 
-    // 5. Parse and attribute ports to sessions
+    // 5. Parse and attribute ports to sessions + track port→pane mapping
     const sessionPorts = new Map<string, Set<number>>();
+    const nextPortToPane = new Map<number, string>();
     let currentPid = 0;
     for (const line of lsofResult.stdout.toString().split("\n")) {
       if (line.startsWith("p")) {
@@ -179,8 +240,16 @@ function refreshPortSnapshot(sessionNames: string[]): boolean {
           if (!set) { set = new Set(); sessionPorts.set(name, set); }
           set.add(port);
         }
+        // Map port to the pane that owns it
+        const rootPanePid = pidToRootPane.get(currentPid);
+        if (rootPanePid != null) {
+          const paneId = pidToPaneId.get(rootPanePid);
+          if (paneId) nextPortToPane.set(port, paneId);
+        }
       }
     }
+
+    portToPaneSnapshot = nextPortToPane;
 
     // 6. Build the new snapshot
     const next = new Map<string, number[]>();
@@ -209,6 +278,111 @@ function mapsEqual(a: Map<string, number[]>, b: Map<string, number[]>): boolean 
 
 function getSessionPorts(sessionName: string): number[] {
   return portSnapshot.get(sessionName) ?? [];
+}
+
+// --- Worktree context builder ---
+
+const repoRootCache = new Map<string, { root: string; ts: number }>();
+const REPO_ROOT_CACHE_TTL_MS = 10000;
+
+function getGitRepoRoot(dir: string): string {
+  if (!dir) return dir;
+  const cached = repoRootCache.get(dir);
+  if (cached && Date.now() - cached.ts < REPO_ROOT_CACHE_TTL_MS) return cached.root;
+  const root = shell(["git", "-C", dir, "rev-parse", "--show-toplevel"]) || dir;
+  repoRootCache.set(dir, { root, ts: Date.now() });
+  return root;
+}
+
+function buildWorktreeContexts(
+  sessionName: string,
+  sessionPorts: number[],
+  sessionAgents: AgentEvent[],
+  exposedSites: ExposedSite[],
+): WorktreeContext[] {
+  const paneEntries = paneDirSnapshot.get(sessionName) ?? [];
+  if (paneEntries.length === 0) return [];
+
+  // Group pane entries by git repo root
+  const byRepoRoot = new Map<string, PaneDirEntry[]>();
+  for (const entry of paneEntries) {
+    const root = getGitRepoRoot(entry.cwd);
+    let list = byRepoRoot.get(root);
+    if (!list) { list = []; byRepoRoot.set(root, list); }
+    list.push(entry);
+  }
+
+  // Build paneId→repoRoot for mapping ports and agents
+  const paneIdToRoot = new Map<string, string>();
+  for (const [root, entries] of byRepoRoot) {
+    for (const e of entries) paneIdToRoot.set(e.paneId, root);
+  }
+
+  // Map ports to repo roots via portToPaneSnapshot
+  const portsByRoot = new Map<string, number[]>();
+  for (const port of sessionPorts) {
+    const paneId = portToPaneSnapshot.get(port);
+    const root = paneId ? paneIdToRoot.get(paneId) : undefined;
+    if (root) {
+      let list = portsByRoot.get(root);
+      if (!list) { list = []; portsByRoot.set(root, list); }
+      list.push(port);
+    }
+  }
+
+  // Map agents to repo roots via paneId
+  const agentsByRoot = new Map<string, AgentEvent[]>();
+  for (const agent of sessionAgents) {
+    const root = agent.paneId ? paneIdToRoot.get(agent.paneId) : undefined;
+    if (root) {
+      let list = agentsByRoot.get(root);
+      if (!list) { list = []; agentsByRoot.set(root, list); }
+      list.push(agent);
+    } else {
+      // Can't determine root — assign to first worktree
+      const firstRoot = byRepoRoot.keys().next().value;
+      if (firstRoot) {
+        let list = agentsByRoot.get(firstRoot);
+        if (!list) { list = []; agentsByRoot.set(firstRoot, list); }
+        list.push(agent);
+      }
+    }
+  }
+
+  // Map exposed sites to repo roots via port
+  const exposedByRoot = new Map<string, ExposedSite[]>();
+  const sessionPortSet = new Set(sessionPorts);
+  for (const site of exposedSites) {
+    if (!sessionPortSet.has(site.port)) continue;
+    const paneId = portToPaneSnapshot.get(site.port);
+    const root = paneId ? paneIdToRoot.get(paneId) : undefined;
+    if (root) {
+      let list = exposedByRoot.get(root);
+      if (!list) { list = []; exposedByRoot.set(root, list); }
+      list.push(site);
+    }
+  }
+
+  // Build WorktreeContext for each repo root
+  const contexts: WorktreeContext[] = [];
+  for (const [root, _entries] of byRepoRoot) {
+    const git = getGitInfo(root);
+    const parts = root.replace(/\/+$/, "").split("/");
+    const folderName = parts[parts.length - 1] || root;
+    contexts.push({
+      dir: root,
+      folderName,
+      branch: git.branch,
+      dirty: git.dirty,
+      isWorktree: git.isWorktree,
+      diffStats: git.dirty ? getDiffStats(root) : null,
+      ports: portsByRoot.get(root) ?? [],
+      agents: agentsByRoot.get(root) ?? [],
+      exposedSites: exposedByRoot.get(root) ?? [],
+    });
+  }
+
+  return contexts;
 }
 
 // --- Git HEAD file watchers ---
@@ -470,6 +644,10 @@ export function startServer(mux: MuxProvider, extraProviders?: MuxProvider[], wa
         else uptime = `${mins}m`;
       }
 
+      const ports = getSessionPorts(name);
+      const agents = mergeAgentsWithPanePresence(name, tracker.getAgents(name));
+      const worktrees = buildWorktreeContexts(name, ports, agents, cachedExposedSites);
+
       return {
         name,
         createdAt,
@@ -479,13 +657,14 @@ export function startServer(mux: MuxProvider, extraProviders?: MuxProvider[], wa
         isWorktree: git.isWorktree,
         unseen: tracker.isUnseen(name),
         panes,
-        ports: getSessionPorts(name),
+        ports,
         windows,
         uptime,
         agentState: tracker.getState(name),
-        agents: mergeAgentsWithPanePresence(name, tracker.getAgents(name)),
+        agents,
         eventTimestamps: tracker.getEventTimestamps(name),
         metadata: metadataStore.get(name),
+        worktrees,
       };
     });
 
