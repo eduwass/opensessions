@@ -1330,8 +1330,8 @@ function SessionCard(props: SessionCardProps) {
                       const prefix = () => tl() ? (isLastPane() ? "└ " : "├ ") : "";
                       return (
                         <box flexDirection="column" flexShrink={0}>
-                          {/* spacer between panes */}
-                          <Show when={sp() > 0 && pi() > 0}>
+                          {/* spacer before each pane (including first — gap from window header) */}
+                          <Show when={sp() > 0}>
                             <Show when={tl()} fallback={<box height={sp()} />}>
                               <For each={Array.from({ length: sp() })}>
                                 {() => (
