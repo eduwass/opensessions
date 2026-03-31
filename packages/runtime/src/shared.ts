@@ -7,16 +7,28 @@ export const PID_FILE = "/tmp/opensessions.pid";
 export const SERVER_IDLE_TIMEOUT_MS = 30_000;
 export const STUCK_RUNNING_TIMEOUT_MS = 3 * 60 * 1000;
 
-export interface WorktreeContext {
-  dir: string;
-  folderName: string;
-  branch: string;
-  dirty: boolean;
-  isWorktree: boolean;
-  diffStats: { added: number; removed: number } | null;
-  ports: number[];
-  agents: AgentEvent[];
-  exposedSites: ExposedSite[];
+export interface PaneData {
+  id: string;
+  title: string;
+  command: string;
+  /** "agent" = claude/cursor/etc, "dev" = dev server with port, "shell" = regular shell */
+  type: "agent" | "dev" | "shell";
+  /** Agent status if type === "agent" */
+  agentStatus?: AgentStatus;
+  /** Agent unseen flag if type === "agent" */
+  agentUnseen?: boolean;
+  /** Listening port if type === "dev" */
+  port?: number;
+  /** Exposed site info if port is exposed */
+  exposedSite?: ExposedSite;
+}
+
+export interface WindowData {
+  id: string;
+  index: number;
+  name: string;
+  active: boolean;
+  panes: PaneData[];
 }
 
 export interface SessionData {
@@ -35,7 +47,7 @@ export interface SessionData {
   agents: AgentEvent[];
   eventTimestamps: number[];
   metadata?: SessionMetadata | null;
-  worktrees: WorktreeContext[];
+  windowData: WindowData[];
 }
 
 export interface ExposedSite {
@@ -56,6 +68,7 @@ export interface ServerState {
   currentSession: string | null;
   theme: string | undefined;
   sidebarWidth: number;
+  sidebarSpacing: number;
   exposedSites: ExposedSite[];
   ts: number;
 }
@@ -138,6 +151,7 @@ export type ClientCommand =
   | { type: "focus-agent-pane"; session: string; agent: string; threadId?: string; threadName?: string }
   | { type: "kill-agent-pane"; session: string; agent: string; threadId?: string; threadName?: string }
   | { type: "focus-exposed-pane"; port: number }
+  | { type: "focus-pane"; paneId: string }
   | { type: "report-width"; width: number };
 
 // Catppuccin Mocha palette

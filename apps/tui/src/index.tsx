@@ -9,8 +9,8 @@ import { ensureServer } from "@opensessions/runtime";
 import {
   type ServerMessage,
   type SessionData,
-  type WorktreeContext,
-  type AgentEvent,
+  type WindowData,
+  type PaneData,
   type ClientCommand,
   type Theme,
   type MetadataTone,
@@ -181,6 +181,7 @@ function App() {
   const [isDetailResizeHover, setIsDetailResizeHover] = createSignal(false);
   const [isDetailResizing, setIsDetailResizing] = createSignal(false);
   const [exposedSites, setExposedSites] = createSignal<ExposedSite[]>([]);
+  const [sidebarSpacing, setSidebarSpacing] = createSignal(1);
   const detailPanelSessionName = createMemo(() => focusedSession() ?? mySession());
 
   // --- Panel focus: sessions list vs agent detail ---
@@ -490,6 +491,7 @@ function App() {
             setCurrentSession(msg.currentSession);
             setTheme(resolveTheme(msg.theme));
             if (msg.exposedSites) setExposedSites(msg.exposedSites);
+            if (msg.sidebarSpacing != null) setSidebarSpacing(msg.sidebarSpacing);
           } else if (msg.type === "focus") {
             setFocusedSession(msg.focusedSession);
             setCurrentSession(msg.currentSession);
@@ -733,36 +735,21 @@ function App() {
           {(session, i) => (
             <SessionCard
               session={session}
-              index={i() + 1}
               isFocused={isFocused(session.name)}
               isCurrent={session.name === currentSession()}
               spinIdx={spinIdx}
               theme={theme}
-              statusColors={S}
+              spacing={sidebarSpacing}
               onSelect={() => {
                 setFocusedSession(session.name);
                 send({ type: "focus-session", name: session.name });
                 switchToSession(session.name);
               }}
+              onFocusPane={(paneId) => {
+                send({ type: "focus-pane", paneId });
+              }}
               onFocusExposedPane={(port) => {
                 send({ type: "focus-exposed-pane", port });
-              }}
-              onFocusAgentPane={(agent) => {
-                send({
-                  type: "focus-agent-pane",
-                  session: session.name,
-                  agent: agent.agent,
-                  threadId: agent.threadId,
-                  threadName: agent.threadName,
-                });
-              }}
-              onDismissAgent={(agent) => {
-                send({
-                  type: "dismiss-agent",
-                  session: session.name,
-                  agent: agent.agent,
-                  threadId: agent.threadId,
-                });
               }}
             />
           )}
@@ -996,20 +983,18 @@ function buildSparkline(timestamps: number[], width: number, windowMs: number = 
 // --- Detail Panel ---
 
 
-// --- Session Card (C5 layout) ---
+// --- Session Card (D2 window-based layout) ---
 
 interface SessionCardProps {
   session: SessionData;
-  index: number;
   isFocused: boolean;
   isCurrent: boolean;
   spinIdx: Accessor<number>;
   theme: Accessor<Theme>;
-  statusColors: Accessor<Theme["status"]>;
+  spacing: Accessor<number>;
   onSelect: () => void;
+  onFocusPane: (paneId: string) => void;
   onFocusExposedPane: (port: number) => void;
-  onFocusAgentPane: (agent: AgentEvent) => void;
-  onDismissAgent: (agent: AgentEvent) => void;
 }
 
 function SessionCard(props: SessionCardProps) {
@@ -1021,10 +1006,14 @@ function SessionCard(props: SessionCardProps) {
   const isUnseenTerminal = () =>
     unseen() && ["done", "error", "interrupted"].includes(status());
 
-  // Accent bar color
   const accentColor = () => {
     if (props.isCurrent) return P().green;
-    if (isUnseenTerminal()) return unseenDotColor();
+    if (isUnseenTerminal()) {
+      const s = status();
+      if (s === "error") return P().red;
+      if (s === "interrupted") return P().peach;
+      return P().teal;
+    }
     const s = status();
     if (s === "error") return P().red;
     if (s === "interrupted") return P().peach;
@@ -1033,26 +1022,20 @@ function SessionCard(props: SessionCardProps) {
     return "transparent";
   };
 
-  const unseenDotColor = () => {
-    const s = status();
-    if (s === "error") return P().red;
-    if (s === "interrupted") return P().peach;
-    return P().teal;
+  const accentChar = () => {
+    if (unseen() && !props.isFocused) return "●";
+    if (accentColor() === "transparent") return " ";
+    return "▌";
   };
 
-  // Collapsed: status indicator (dot or spinner) right-aligned
   const statusDot = () => {
     const s = status();
     if (s === "running") return SPINNERS[props.spinIdx() % SPINNERS.length]!;
-    if (s === "done") return "●";
-    if (s === "error") return "●";
-    if (s === "interrupted") return "●";
-    if (isUnseenTerminal()) return "●";
+    if (["done", "error", "interrupted"].includes(s)) return "●";
     return "";
   };
 
   const statusDotColor = () => {
-    if (isUnseenTerminal()) return unseenDotColor();
     const s = status();
     if (s === "running") return P().yellow;
     if (s === "done") return P().green;
@@ -1061,239 +1044,158 @@ function SessionCard(props: SessionCardProps) {
     return P().surface2;
   };
 
-  // Unseen indicator for collapsed sessions
-  const accentChar = () => {
-    if (unseen() && !props.isFocused) return "●";
-    if (accentColor() === "transparent") return " ";
-    return "▌";
-  };
-
   const nameColor = () => {
     if (props.isFocused) return P().text;
     if (props.isCurrent) return P().subtext1;
     return P().subtext0;
   };
 
-  const indexColor = () => {
-    if (props.isFocused) return P().subtext0;
-    return P().surface2;
-  };
-
   const truncName = () => {
     const n = props.session.name;
-    return n.length > 18 ? n.slice(0, 17) + "…" : n;
+    return n.length > 20 ? n.slice(0, 19) + "…" : n;
   };
 
-  // Collapsed: show folder · branch inline
   const collapsedInfo = () => {
     const d = props.session.dir;
     if (!d) return "";
     const parts = d.replace(/\/+$/, "").split("/");
     const folder = parts[parts.length - 1] || "";
     const b = props.session.branch;
-    if (b) return `${folder} · ${b.length > 12 ? b.slice(0, 11) + "…" : b}`;
+    if (b) return `${folder} · ${b.length > 14 ? b.slice(0, 13) + "…" : b}`;
     return folder;
   };
 
-  const worktrees = () => props.session.worktrees ?? [];
+  const windowData = () => props.session.windowData ?? [];
+
+  // Pane rendering helpers
+  const paneDot = (pane: PaneData) => {
+    if (pane.type === "agent" && pane.agentStatus === "running")
+      return SPINNERS[props.spinIdx() % SPINNERS.length]!;
+    if (pane.type === "dev") return "●";
+    if (pane.type === "agent") return "●";
+    return "○";
+  };
+
+  const paneDotColor = (pane: PaneData) => {
+    if (pane.type === "agent") {
+      const s = pane.agentStatus;
+      if (s === "running") return P().yellow;
+      if (s === "done") return P().green;
+      if (s === "error") return P().red;
+      if (s === "interrupted") return P().peach;
+      if (s === "waiting") return P().blue;
+      if (pane.agentUnseen) return P().teal;
+      return P().surface2;
+    }
+    if (pane.type === "dev") {
+      if (pane.exposedSite?.healthy === true) return P().green;
+      if (pane.exposedSite?.healthy === false) return P().red;
+      return P().sky;
+    }
+    return P().surface2;
+  };
+
+  const paneLabel = (pane: PaneData) => {
+    if (pane.type === "dev" && pane.exposedSite) {
+      const d = pane.exposedSite.domain;
+      const domain = d.length > 18 ? d.slice(0, 17) + "…" : d;
+      return `:${pane.port} ${domain}`;
+    }
+    if (pane.type === "dev" && pane.port) {
+      return `⌁ ${pane.port}`;
+    }
+    const t = pane.title;
+    if (t && t !== pane.command) {
+      return t.length > 22 ? t.slice(0, 21) + "…" : t;
+    }
+    return pane.command || "shell";
+  };
+
+  const paneLabelColor = (pane: PaneData) => {
+    if (pane.type === "dev") return P().blue;
+    if (pane.type === "agent") return P().subtext0;
+    return P().overlay0;
+  };
 
   return (
     <box flexDirection="column" flexShrink={0}>
-      {/* Session header row */}
-      <box
-        flexDirection="row"
-        onMouseDown={props.onSelect}
-        paddingLeft={1}
-      >
-        {/* Left accent */}
-        <text style={{ fg: unseen() && !props.isFocused ? unseenDotColor() : accentColor() }}>{accentChar()}</text>
-
-        {/* Index */}
-        <box width={3} flexShrink={0}>
-          <text style={{ fg: indexColor() }}>{String(props.index).padStart(2)}</text>
-        </box>
-
-        {/* Name + status dot */}
+      {/* Session header */}
+      <box flexDirection="row" onMouseDown={props.onSelect} paddingLeft={1}>
+        <text style={{ fg: accentColor() }}>{accentChar()}</text>
         <text truncate flexGrow={1}>
           <span style={{ fg: nameColor(), attributes: props.isFocused || props.isCurrent ? BOLD : undefined }}>
-            {truncName()}
+            {" "}{truncName()}
           </span>
         </text>
         <Show when={statusDot()}>
           <text flexShrink={0}>
-            <span style={{ fg: statusDotColor() }}>{" "}{statusDot()}</span>
+            <span style={{ fg: statusDotColor() }}>{statusDot()}{" "}</span>
           </text>
         </Show>
       </box>
 
-      {/* Collapsed: folder · branch on second line */}
+      {/* Collapsed: folder · branch */}
       <Show when={!props.isFocused && collapsedInfo()}>
-        <box flexDirection="row" paddingLeft={5}>
+        <box paddingLeft={3}>
           <text truncate>
             <span style={{ fg: P().overlay0, attributes: DIM }}>{collapsedInfo()}</span>
           </text>
         </box>
       </Show>
 
-      {/* Expanded: worktree tree (only when focused) */}
-      <Show when={props.isFocused && worktrees().length > 0}>
-        <box flexDirection="column" paddingLeft={2}>
-          <For each={worktrees()}>
-            {(wt, i) => {
-              const isLast = () => i() === worktrees().length - 1;
-              const treePrefix = () => isLast() ? "└─ " : "├─ ";
-              const gutter = () => isLast() ? "   " : "│  ";
-              const truncFolder = () => {
-                const f = wt.folderName;
-                return f.length > 16 ? f.slice(0, 15) + "…" : f;
-              };
-              const truncBranch = () => {
-                const b = wt.branch;
-                if (!b) return "";
-                return b.length > 12 ? b.slice(0, 11) + "…" : b;
-              };
-              const hasContent = () =>
-                wt.exposedSites.length > 0 ||
-                wt.ports.filter((p) => !wt.exposedSites.some((s) => s.port === p)).length > 0 ||
-                wt.agents.length > 0;
+      {/* Expanded: window/pane tree */}
+      <Show when={props.isFocused && windowData().length > 0}>
+        <box flexDirection="column" paddingLeft={3}>
+          <For each={windowData()}>
+            {(win, wi) => (
+              <box flexDirection="column" flexShrink={0}>
+                {/* Spacing between windows */}
+                <Show when={props.spacing() > 0}>
+                  <box height={props.spacing()} />
+                </Show>
 
-              // Gutter for the spacer line — show │ if not the first worktree
-              const spacerGutter = () => i() === 0 ? "" : (isLast() ? "│" : "│");
+                {/* Window header: index + name */}
+                <text truncate>
+                  <span style={{ fg: win.active ? P().green : P().overlay0, attributes: win.active ? BOLD : undefined }}>
+                    {String(win.index)}
+                  </span>
+                  <span style={{ fg: win.active ? P().subtext1 : P().overlay0 }}>
+                    {" "}{win.name}
+                  </span>
+                </text>
 
-              return (
-                <box flexDirection="column" flexShrink={0}>
-                  {/* Spacer with continuous gutter line */}
-                  <text><span style={{ fg: P().surface2 }}>{spacerGutter()}</span></text>
+                {/* Panes under this window */}
+                <For each={win.panes}>
+                  {(pane, pi) => {
+                    const isLastPane = () => pi() === win.panes.length - 1;
+                    const prefix = () => isLastPane() ? "└ " : "├ ";
 
-                  {/* Worktree header: ├─  folder ·  branch +N -N */}
-                  <box flexDirection="row">
-                    <text flexShrink={0}>
-                      <span style={{ fg: P().surface2 }}>{treePrefix()}</span>
-                      <span style={{ fg: P().teal }}>{" "}</span>
-                      <span style={{ fg: P().subtext1 }}>{truncFolder()}</span>
-                    </text>
-                    <Show when={wt.branch}>
-                      <text flexShrink={0}>
-                        <span style={{ fg: P().overlay0 }}>{" · "}</span>
-                        <span style={{ fg: P().pink }}>{" "}</span>
-                        <span style={{ fg: P().pink }}>{truncBranch()}</span>
-                      </text>
-                    </Show>
-                    <Show when={wt.diffStats}>
-                      <text flexShrink={0}>
-                        <span style={{ fg: P().green }}>{" +"}{String(wt.diffStats!.added)}</span>
-                        <span style={{ fg: P().red }}>{" -"}{String(wt.diffStats!.removed)}</span>
-                      </text>
-                    </Show>
-                  </box>
-
-                  {/* Indented content under the worktree */}
-                  <Show when={hasContent()}>
-                    <box flexDirection="column">
-                      {/* Exposed sites */}
-                      <For each={wt.exposedSites}>
-                        {(site) => {
-                          const healthColor = () =>
-                            site.healthy === true ? P().green : site.healthy === false ? P().red : P().overlay0;
-                          const truncDomain = () => {
-                            const d = site.domain;
-                            return d.length > 18 ? d.slice(0, 17) + "…" : d;
-                          };
-                          return (
-                            <box flexDirection="row"
-                              onMouseDown={() => props.onFocusExposedPane(site.port)}
-                            >
-                              <text truncate>
-                                <span style={{ fg: P().surface2 }}>{gutter()}</span>
-                                <span style={{ fg: P().surface2 }}>{"   "}</span>
-                                <span style={{ fg: healthColor() }}>{"●"}</span>
-                                <span style={{ fg: P().overlay0 }}>{" :"}{String(site.port)}</span>
-                                <span style={{ fg: P().blue }}>{" "}{truncDomain()}</span>
-                              </text>
-                            </box>
-                          );
+                    return (
+                      <box flexDirection="row"
+                        onMouseDown={() => {
+                          if (pane.type === "dev" && pane.exposedSite) {
+                            props.onFocusExposedPane(pane.exposedSite.port);
+                          } else {
+                            props.onFocusPane(pane.id);
+                          }
                         }}
-                      </For>
-
-                      {/* Unexposed ports */}
-                      <For each={wt.ports.filter((p) => !wt.exposedSites.some((s) => s.port === p))}>
-                        {(port) => (
-                          <box flexDirection="row"
-                            onMouseDown={() => props.onFocusExposedPane(port)}
-                          >
-                            <text>
-                              <span style={{ fg: P().surface2 }}>{gutter()}</span>
-                              <span style={{ fg: P().surface2 }}>{"   "}</span>
-                              <span style={{ fg: P().overlay0 }}>{"⌁ "}{String(port)}</span>
-                            </text>
-                          </box>
-                        )}
-                      </For>
-
-                      {/* Agents — simple indented list, no sub-tree lines */}
-                      <For each={wt.agents}>
-                        {(agent) => {
-                          const agentStatus = () => agent.status;
-                          const agentDot = () => {
-                            const s = agentStatus();
-                            if (s === "running") return SPINNERS[props.spinIdx() % SPINNERS.length]!;
-                            return "●";
-                          };
-                          const agentDotColor = () => {
-                            const s = agentStatus();
-                            if (s === "running") return P().yellow;
-                            if (s === "done") return P().green;
-                            if (s === "error") return P().red;
-                            if (s === "interrupted") return P().peach;
-                            if (s === "waiting") return P().blue;
-                            if (agent.unseen) return P().teal;
-                            return P().surface2;
-                          };
-                          const truncThread = () => {
-                            const t = agent.threadName;
-                            if (!t) return agent.agent;
-                            return t.length > 18 ? t.slice(0, 17) + "…" : t;
-                          };
-                          const [isDismissHover, setIsDismissHover] = createSignal(false);
-                          const showDismiss = () =>
-                            ["done", "error", "interrupted"].includes(agentStatus());
-
-                          return (
-                            <box flexDirection="row"
-                              onMouseDown={() => props.onFocusAgentPane(agent)}
-                            >
-                              <text truncate flexGrow={1}>
-                                <span style={{ fg: P().surface2 }}>{gutter()}</span>
-                                <span style={{ fg: P().surface2 }}>{"   "}</span>
-                                <span style={{ fg: agentDotColor() }}>{agentDot()}</span>
-                                <span style={{ fg: P().subtext0 }}>{" "}{truncThread()}</span>
-                              </text>
-                              <Show when={showDismiss()}>
-                                <text flexShrink={0}
-                                  onMouseDown={(e) => {
-                                    e.stopPropagation();
-                                    props.onDismissAgent(agent);
-                                  }}
-                                  onMouseOver={() => setIsDismissHover(true)}
-                                  onMouseOut={() => setIsDismissHover(false)}
-                                >
-                                  <span style={{ fg: isDismissHover() ? P().red : P().surface2 }}>{" ✕"}</span>
-                                </text>
-                              </Show>
-                            </box>
-                          );
-                        }}
-                      </For>
-                    </box>
-                  </Show>
-                </box>
-              );
-            }}
+                      >
+                        <text truncate>
+                          <span style={{ fg: P().surface2 }}>{prefix()}</span>
+                          <span style={{ fg: paneDotColor(pane) }}>{paneDot(pane)}</span>
+                          <span style={{ fg: paneLabelColor(pane) }}>{" "}{paneLabel(pane)}</span>
+                        </text>
+                      </box>
+                    );
+                  }}
+                </For>
+              </box>
+            )}
           </For>
         </box>
       </Show>
 
-      {/* Breathing room */}
+      {/* Breathing room between sessions */}
       <box height={1} />
     </box>
   );

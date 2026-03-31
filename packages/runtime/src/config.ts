@@ -20,6 +20,8 @@ export interface OpensessionsConfig {
   keybinding?: string;
   /** Persisted detail panel heights keyed by mux session name */
   detailPanelHeights?: Record<string, number>;
+  /** Vertical spacing between window blocks in the sidebar (0=tight, 1=relaxed, default 1) */
+  sidebarSpacing?: number;
 }
 
 const DEFAULTS: OpensessionsConfig = {

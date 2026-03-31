@@ -15,7 +15,6 @@ import {
 import {
   type ServerState,
   type SessionData,
-  type WorktreeContext,
   type ClientCommand,
   type FocusUpdate,
   type ExposedSite,
@@ -287,125 +286,107 @@ function getSessionPorts(sessionName: string): number[] {
   return portSnapshot.get(sessionName) ?? [];
 }
 
-// --- Worktree context builder ---
+// --- Window/pane data builder ---
 
-const repoRootCache = new Map<string, { root: string; ts: number }>();
-const REPO_ROOT_CACHE_TTL_MS = 10000;
+const AGENT_COMMANDS = new Set(["claude", "cursor", "code", "amp", "codex", "opencode"]);
+const SIDEBAR_TITLES = new Set(["sidebar", "opensessions-sidebar"]);
 
-function getGitRepoRoot(dir: string): string {
-  if (!dir) return dir;
-  const cached = repoRootCache.get(dir);
-  if (cached && Date.now() - cached.ts < REPO_ROOT_CACHE_TTL_MS) return cached.root;
-  const root = shell(["git", "-C", dir, "rev-parse", "--show-toplevel"]) || dir;
-  repoRootCache.set(dir, { root, ts: Date.now() });
-  return root;
-}
-
-function buildWorktreeContexts(
+function buildWindowData(
   sessionName: string,
   sessionPorts: number[],
   sessionAgents: AgentEvent[],
   exposedSites: ExposedSite[],
-): WorktreeContext[] {
-  const paneEntries = paneDirSnapshot.get(sessionName) ?? [];
-  if (paneEntries.length === 0) return [];
+): import("../shared").WindowData[] {
+  // Get windows and panes from tmux directly
+  const winRaw = shell(["tmux", "list-windows", "-t", sessionName, "-F", "#{window_id}\t#{window_index}\t#{window_name}\t#{window_active}"]);
+  if (!winRaw) return [];
 
-  // Group pane entries by git repo root
-  const byRepoRootRaw = new Map<string, PaneDirEntry[]>();
-  for (const entry of paneEntries) {
-    const root = getGitRepoRoot(entry.cwd);
-    let list = byRepoRootRaw.get(root);
-    if (!list) { list = []; byRepoRootRaw.set(root, list); }
-    list.push(entry);
+  const paneRaw = shell(["tmux", "list-panes", "-s", "-t", sessionName,
+    "-F", "#{pane_id}\t#{window_id}\t#{pane_title}\t#{pane_current_command}\t#{pane_pid}"]);
+
+  // Parse windows
+  const windowsList: { id: string; index: number; name: string; active: boolean }[] = [];
+  for (const line of winRaw.split("\n")) {
+    const [id, indexStr, name, activeStr] = line.split("\t");
+    if (!id) continue;
+    windowsList.push({ id, index: parseInt(indexStr, 10), name: name ?? "", active: activeStr === "1" });
   }
 
-  // Filter out nested repos (submodules) — if root A is inside root B, drop A
-  const allRoots = [...byRepoRootRaw.keys()];
-  const nestedRoots = new Set<string>();
-  for (const root of allRoots) {
-    for (const other of allRoots) {
-      if (root !== other && root.startsWith(other + "/")) {
-        nestedRoots.add(root);
-        break;
-      }
-    }
-  }
-  const byRepoRoot = new Map<string, PaneDirEntry[]>();
-  for (const [root, entries] of byRepoRootRaw) {
-    if (!nestedRoots.has(root)) byRepoRoot.set(root, entries);
+  // Parse panes grouped by window
+  const panesByWindow = new Map<string, { id: string; title: string; command: string; pid: number }[]>();
+  for (const line of (paneRaw ?? "").split("\n")) {
+    const [paneId, windowId, title, command, pidStr] = line.split("\t");
+    if (!paneId || !windowId) continue;
+    if (SIDEBAR_TITLES.has(title ?? "")) continue;
+    let list = panesByWindow.get(windowId);
+    if (!list) { list = []; panesByWindow.set(windowId, list); }
+    list.push({ id: paneId, title: title ?? "", command: command ?? "", pid: parseInt(pidStr, 10) });
   }
 
-  // Build paneId→repoRoot for mapping ports and agents
-  const paneIdToRoot = new Map<string, string>();
-  for (const [root, entries] of byRepoRoot) {
-    for (const e of entries) paneIdToRoot.set(e.paneId, root);
-  }
-
-  // Map ports to repo roots via portToPaneSnapshot
-  const portsByRoot = new Map<string, number[]>();
+  // Build port→pane and pane→port mappings
+  const portByPane = new Map<string, number>();
   for (const port of sessionPorts) {
     const paneId = portToPaneSnapshot.get(port);
-    const root = paneId ? paneIdToRoot.get(paneId) : undefined;
-    if (root) {
-      let list = portsByRoot.get(root);
-      if (!list) { list = []; portsByRoot.set(root, list); }
-      list.push(port);
-    }
+    if (paneId) portByPane.set(paneId, port);
   }
 
-  // Map agents to repo roots via paneId
-  const agentsByRoot = new Map<string, AgentEvent[]>();
+  // Build paneId→agent mapping
+  const agentByPane = new Map<string, AgentEvent>();
   for (const agent of sessionAgents) {
-    const root = agent.paneId ? paneIdToRoot.get(agent.paneId) : undefined;
-    if (root) {
-      let list = agentsByRoot.get(root);
-      if (!list) { list = []; agentsByRoot.set(root, list); }
-      list.push(agent);
-    } else {
-      // Can't determine root — assign to first worktree
-      const firstRoot = byRepoRoot.keys().next().value;
-      if (firstRoot) {
-        let list = agentsByRoot.get(firstRoot);
-        if (!list) { list = []; agentsByRoot.set(firstRoot, list); }
-        list.push(agent);
-      }
-    }
+    if (agent.paneId) agentByPane.set(agent.paneId, agent);
   }
 
-  // Map exposed sites to repo roots via port
-  const exposedByRoot = new Map<string, ExposedSite[]>();
-  const sessionPortSet = new Set(sessionPorts);
+  // Build port→exposedSite mapping
+  const exposedByPort = new Map<number, import("../shared").ExposedSite>();
   for (const site of exposedSites) {
-    if (!sessionPortSet.has(site.port)) continue;
-    const paneId = portToPaneSnapshot.get(site.port);
-    const root = paneId ? paneIdToRoot.get(paneId) : undefined;
-    if (root) {
-      let list = exposedByRoot.get(root);
-      if (!list) { list = []; exposedByRoot.set(root, list); }
-      list.push(site);
-    }
+    exposedByPort.set(site.port, site);
   }
 
-  // Build WorktreeContext for each repo root
-  const contexts: WorktreeContext[] = [];
-  for (const [root, _entries] of byRepoRoot) {
-    const git = getGitInfo(root);
-    const parts = root.replace(/\/+$/, "").split("/");
-    const folderName = parts[parts.length - 1] || root;
-    contexts.push({
-      dir: root,
-      folderName,
-      branch: git.branch,
-      dirty: git.dirty,
-      isWorktree: git.isWorktree,
-      diffStats: git.dirty ? getDiffStats(root) : null,
-      ports: portsByRoot.get(root) ?? [],
-      agents: agentsByRoot.get(root) ?? [],
-      exposedSites: exposedByRoot.get(root) ?? [],
+  // Build WindowData[]
+  const result: import("../shared").WindowData[] = [];
+  for (const win of windowsList) {
+    const rawPanes = panesByWindow.get(win.id) ?? [];
+    const panes: import("../shared").PaneData[] = [];
+
+    for (const pane of rawPanes) {
+      const agent = agentByPane.get(pane.id);
+      const port = portByPane.get(pane.id);
+      const exposed = port != null ? exposedByPort.get(port) : undefined;
+
+      // Determine pane type
+      let type: "agent" | "dev" | "shell" = "shell";
+      if (agent) {
+        type = "agent";
+      } else if (port != null) {
+        type = "dev";
+      } else {
+        // Check if command looks like an agent
+        const cmd = pane.command.toLowerCase();
+        if (AGENT_COMMANDS.has(cmd)) type = "agent";
+      }
+
+      panes.push({
+        id: pane.id,
+        title: pane.title,
+        command: pane.command,
+        type,
+        agentStatus: agent?.status,
+        agentUnseen: agent?.unseen,
+        port,
+        exposedSite: exposed,
+      });
+    }
+
+    result.push({
+      id: win.id,
+      index: win.index,
+      name: win.name,
+      active: win.active,
+      panes,
     });
   }
 
-  return contexts;
+  return result;
 }
 
 // --- Git HEAD file watchers ---
@@ -669,7 +650,7 @@ export function startServer(mux: MuxProvider, extraProviders?: MuxProvider[], wa
 
       const ports = getSessionPorts(name);
       const agents = mergeAgentsWithPanePresence(name, tracker.getAgents(name));
-      const worktrees = buildWorktreeContexts(name, ports, agents, cachedExposedSites);
+      const windowData = buildWindowData(name, ports, agents, cachedExposedSites);
 
       return {
         name,
@@ -687,7 +668,7 @@ export function startServer(mux: MuxProvider, extraProviders?: MuxProvider[], wa
         agents,
         eventTimestamps: tracker.getEventTimestamps(name),
         metadata: metadataStore.get(name),
-        worktrees,
+        windowData,
       };
     });
 
@@ -699,7 +680,8 @@ export function startServer(mux: MuxProvider, extraProviders?: MuxProvider[], wa
       focusedSession = sessions.find((s) => s.name === currentSession)?.name ?? sessions[0]!.name;
     }
 
-    return { type: "state", sessions, focusedSession, currentSession, theme: currentTheme, sidebarWidth, exposedSites: cachedExposedSites, ts: Date.now() };
+    const spacing = loadConfig().sidebarSpacing ?? 1;
+    return { type: "state", sessions, focusedSession, currentSession, theme: currentTheme, sidebarWidth, sidebarSpacing: spacing, exposedSites: cachedExposedSites, ts: Date.now() };
   }
 
   // --- Exposed sites ---
@@ -1794,6 +1776,11 @@ export function startServer(mux: MuxProvider, extraProviders?: MuxProvider[], wa
         break;
       case "focus-exposed-pane":
         focusExposedPane(cmd.port);
+        break;
+      case "focus-pane":
+        try {
+          Bun.spawnSync(["tmux", "select-pane", "-t", cmd.paneId], { stdout: "pipe", stderr: "pipe" });
+        } catch {}
         break;
       case "kill-agent-pane":
         log("handleCommand", "kill-agent-pane received", { session: cmd.session, agent: cmd.agent, threadId: cmd.threadId, threadName: cmd.threadName });
