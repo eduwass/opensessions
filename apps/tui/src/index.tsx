@@ -187,6 +187,7 @@ function App() {
   const [sidebarWindowNumbers, setSidebarWindowNumbers] = createSignal(true);
   const [sidebarCollapseWindows, setSidebarCollapseWindows] = createSignal(false);
   const [sidebarCollapseSessions, setSidebarCollapseSessions] = createSignal(true);
+  const [sidebarHighlightSession, setSidebarHighlightSession] = createSignal(true);
   const detailPanelSessionName = createMemo(() => focusedSession() ?? mySession());
 
   // --- Panel focus: sessions list vs agent detail ---
@@ -502,6 +503,7 @@ function App() {
             if (msg.sidebarWindowNumbers != null) setSidebarWindowNumbers(msg.sidebarWindowNumbers);
             if (msg.sidebarCollapseWindows != null) setSidebarCollapseWindows(msg.sidebarCollapseWindows);
             if (msg.sidebarCollapseSessions != null) setSidebarCollapseSessions(msg.sidebarCollapseSessions);
+            if (msg.sidebarHighlightSession != null) setSidebarHighlightSession(msg.sidebarHighlightSession);
           } else if (msg.type === "focus") {
             setFocusedSession(msg.focusedSession);
             setCurrentSession(msg.currentSession);
@@ -763,6 +765,7 @@ function App() {
               windowNumbers={sidebarWindowNumbers}
               collapseWindows={sidebarCollapseWindows}
               collapseSessions={sidebarCollapseSessions}
+              highlightSession={sidebarHighlightSession}
               onSelect={() => {
                 setFocusedSession(session.name);
                 send({ type: "focus-session", name: session.name });
@@ -883,6 +886,14 @@ function App() {
               <text style={{ fg: P().subtext0 }}>
                 <span style={{ fg: sidebarWindowNumbers() ? P().green : P().surface2 }}>{sidebarWindowNumbers() ? "✓ " : "✗ "}</span>
                 <span>{"Window numbers"}</span>
+              </text>
+            </box>
+            <box paddingLeft={1}
+              onMouseDown={() => { const v = !sidebarHighlightSession(); setSidebarHighlightSession(v); saveConfig({ sidebarHighlightSession: v }); }}
+            >
+              <text style={{ fg: P().subtext0 }}>
+                <span style={{ fg: sidebarHighlightSession() ? P().green : P().surface2 }}>{sidebarHighlightSession() ? "✓ " : "✗ "}</span>
+                <span>{"Highlight session"}</span>
               </text>
             </box>
             <box paddingLeft={1}
@@ -1142,6 +1153,7 @@ interface SessionCardProps {
   windowNumbers: Accessor<boolean>;
   collapseWindows: Accessor<boolean>;
   collapseSessions: Accessor<boolean>;
+  highlightSession: Accessor<boolean>;
   onSelect: () => void;
   onFocusPane: (paneId: string) => void;
   onFocusExposedPane: (port: number) => void;
@@ -1272,7 +1284,9 @@ function SessionCard(props: SessionCardProps) {
   return (
     <box flexDirection="column" flexShrink={0}>
       {/* Session header */}
-      <box flexDirection="row" onMouseDown={props.onSelect} paddingLeft={1}>
+      <box flexDirection="row" onMouseDown={props.onSelect} paddingLeft={1}
+        backgroundColor={props.isFocused && props.highlightSession() ? P().surface0 : undefined}
+      >
         <text style={{ fg: accentColor() }}>{accentChar()}</text>
         <text truncate flexGrow={1}>
           <span style={{ fg: nameColor(), attributes: props.isFocused || props.isCurrent ? BOLD : undefined }}>

@@ -32,6 +32,8 @@ export interface OpensessionsConfig {
   sidebarCollapseWindows?: boolean;
   /** Collapse inactive sessions to just name + branch (default true) */
   sidebarCollapseSessions?: boolean;
+  /** Show background highlight on focused session (default true) */
+  sidebarHighlightSession?: boolean;
 }
 
 const DEFAULTS: OpensessionsConfig = {

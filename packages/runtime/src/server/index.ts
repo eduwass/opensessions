@@ -694,7 +694,8 @@ export function startServer(mux: MuxProvider, extraProviders?: MuxProvider[], wa
     const windowNumbers = cfg.sidebarWindowNumbers !== false;
     const collapseWindows = cfg.sidebarCollapseWindows === true;
     const collapseSessions = cfg.sidebarCollapseSessions !== false;
-    return { type: "state", sessions, focusedSession, currentSession, theme: currentTheme, sidebarWidth, sidebarSpacing: spacing, sidebarTreeLines: treeLines, sidebarWindowBadge: windowBadge, sidebarWindowNumbers: windowNumbers, sidebarCollapseWindows: collapseWindows, sidebarCollapseSessions: collapseSessions, exposedSites: cachedExposedSites, ts: Date.now() };
+    const highlightSession = cfg.sidebarHighlightSession !== false;
+    return { type: "state", sessions, focusedSession, currentSession, theme: currentTheme, sidebarWidth, sidebarSpacing: spacing, sidebarTreeLines: treeLines, sidebarWindowBadge: windowBadge, sidebarWindowNumbers: windowNumbers, sidebarCollapseWindows: collapseWindows, sidebarCollapseSessions: collapseSessions, sidebarHighlightSession: highlightSession, exposedSites: cachedExposedSites, ts: Date.now() };
   }
 
   // --- Exposed sites ---

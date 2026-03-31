@@ -75,6 +75,7 @@ export interface ServerState {
   sidebarWindowNumbers: boolean;
   sidebarCollapseWindows: boolean;
   sidebarCollapseSessions: boolean;
+  sidebarHighlightSession: boolean;
   exposedSites: ExposedSite[];
   ts: number;
 }
