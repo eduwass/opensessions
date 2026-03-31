@@ -289,6 +289,8 @@ function getSessionPorts(sessionName: string): number[] {
 // --- Window/pane data builder ---
 
 const AGENT_COMMANDS = new Set(["claude", "cursor", "code", "amp", "codex", "opencode"]);
+// Title patterns that indicate a pane is an agent (Claude Code uses ✳/✱/braille prefix)
+const AGENT_TITLE_RE = /^[\u2800-\u28FF✳✱]/;
 const SIDEBAR_TITLES = new Set(["sidebar", "opensessions-sidebar"]);
 
 function buildWindowData(
@@ -369,7 +371,7 @@ function buildWindowData(
       let agent = agentByPane.get(pane.id);
       const port = portByPane.get(pane.id);
       const exposed = port != null ? exposedByPort.get(port) : undefined;
-      const isAgentCmd = AGENT_COMMANDS.has(pane.command.toLowerCase());
+      const isAgentCmd = AGENT_COMMANDS.has(pane.command.toLowerCase()) || AGENT_TITLE_RE.test(pane.title);
 
       // If no matched agent but pane looks like an agent, try matching unmatched agents
       // Match by threadName containing the pane title (stripped of prefix)
