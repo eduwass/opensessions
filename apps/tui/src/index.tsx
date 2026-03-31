@@ -1178,20 +1178,15 @@ function SessionCard(props: SessionCardProps) {
   };
 
   const paneDotColor = (pane: PaneData) => {
+    // Active pane: green icon
+    if (pane.active) return P().green;
+    // Inactive: dim/muted
     if (pane.type === "agent") {
       const s = pane.agentStatus;
       if (s === "running") return P().yellow;
-      if (s === "done") return P().green;
       if (s === "error") return P().red;
-      if (s === "interrupted") return P().peach;
-      if (s === "waiting") return P().blue;
       if (pane.agentUnseen) return P().teal;
       return P().surface2;
-    }
-    if (pane.type === "dev") {
-      if (pane.exposedSite?.healthy === true) return P().green;
-      if (pane.exposedSite?.healthy === false) return P().red;
-      return P().sky;
     }
     return P().surface2;
   };
@@ -1213,6 +1208,9 @@ function SessionCard(props: SessionCardProps) {
   };
 
   const paneLabelColor = (pane: PaneData) => {
+    // Active pane: green text
+    if (pane.active) return P().green;
+    // Inactive: dim type colors (DIM attribute applied in render)
     if (pane.type === "dev") return P().blue;
     if (pane.type === "agent") return P().peach;
     return P().overlay0;
@@ -1296,9 +1294,11 @@ function SessionCard(props: SessionCardProps) {
                             onMouseDown={() => props.onFocusPane(pane.id)}
                           >
                             <text truncate>
-                              <span style={{ fg: pane.active ? P().green : P().surface2 }}>{prefix()}</span>
+                              <span style={{ fg: P().surface2 }}>{prefix()}</span>
                               <span style={{ fg: paneDotColor(pane) }}>{paneDot(pane)}</span>
-                              <span style={{ fg: pane.active ? P().text : paneLabelColor(pane), attributes: pane.active ? BOLD : undefined }}>{" "}{paneLabel(pane)}</span>
+                              <span style={{ fg: paneLabelColor(pane), attributes: pane.active ? BOLD : DIM }}>
+                                {pane.active ? " ▸ " : "  "}{paneLabel(pane)}
+                              </span>
                             </text>
                           </box>
                         </box>
