@@ -1287,9 +1287,9 @@ function SessionCard(props: SessionCardProps) {
     if (pane.active) return P().green;
     if (pane.type === "agent") {
       if (isPaneRunning(pane)) return P().yellow;
-      if (pane.agentStatus === "done") return P().green;
-      if (pane.agentStatus === "error") return P().red;
+      // Unseen takes priority over done/error — it's the "needs attention" state
       if (pane.agentUnseen) return P().teal;
+      if (pane.agentStatus === "error") return P().red;
       return P().surface2;
     }
     return P().surface2;
@@ -1316,6 +1316,7 @@ function SessionCard(props: SessionCardProps) {
 
   const paneLabelColor = (pane: PaneData) => {
     if (pane.active) return P().green;
+    if (pane.type === "agent" && pane.agentUnseen) return P().teal;
     return P().overlay0;
   };
 
@@ -1417,7 +1418,7 @@ function SessionCard(props: SessionCardProps) {
                             <text truncate>
                               <span style={{ fg: P().surface2 }}>{prefix()}</span>
                               <span style={{ fg: paneDotColor(pane) }}>{paneDot(pane)}</span>
-                              <span style={{ fg: paneLabelColor(pane), attributes: pane.active ? BOLD : DIM }}>
+                              <span style={{ fg: paneLabelColor(pane), attributes: pane.active ? BOLD : (pane.agentUnseen ? undefined : DIM) }}>
                                 {" "}{paneLabel(pane)}
                               </span>
                             </text>
