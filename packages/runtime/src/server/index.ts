@@ -659,6 +659,24 @@ export function startServer(mux: MuxProvider, extraProviders?: MuxProvider[], wa
       const agents = mergeAgentsWithPanePresence(name, tracker.getAgents(name));
       const windowData = buildWindowData(name, ports, agents, cachedExposedSites);
 
+      // Auto-clear unseen when pane is actively focused (any navigation method)
+      if (name === currentSession) {
+        for (const win of windowData) {
+          for (const pane of win.panes) {
+            if (pane.active && pane.agentUnseen) {
+              tracker.markSeenInstance(name, pane.command, undefined);
+              // Also try matching by paneId in the agents list
+              for (const a of agents) {
+                if (a.paneId === pane.id && a.unseen) {
+                  tracker.markSeenInstance(name, a.agent, a.threadId);
+                }
+              }
+              pane.agentUnseen = false;
+            }
+          }
+        }
+      }
+
       return {
         name,
         createdAt,
