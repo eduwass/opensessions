@@ -190,7 +190,7 @@ function App() {
   const [focusedAgentIdx, setFocusedAgentIdx] = createSignal(0);
 
   // --- Modal state ---
-  const [modal, setModal] = createSignal<"none" | "theme-picker" | "confirm-kill">("none");
+  const [modal, setModal] = createSignal<"none" | "spacing-picker" | "theme-picker" | "confirm-kill">("none");
   const [killTarget, setKillTarget] = createSignal<string | null>(null);
   let themeBeforePreview: Theme | null = null;
 
@@ -578,6 +578,19 @@ function App() {
       return;
     }
 
+    // --- Spacing picker modal ---
+    if (currentModal === "spacing-picker") {
+      if (key.name === "escape") {
+        setModal("none");
+      } else if (key.name === "1" || key.name === "0" || key.name === "2") {
+        const val = parseInt(key.name, 10);
+        setSidebarSpacing(val);
+        saveConfig({ sidebarSpacing: val });
+        setModal("none");
+      }
+      return;
+    }
+
     // --- Confirm kill modal ---
     if (currentModal === "confirm-kill") {
       if (key.name === "y") {
@@ -761,15 +774,24 @@ function App() {
         <box height={1}>
           <text style={{ fg: P().surface2 }}>{"─".repeat(200)}</text>
         </box>
-        <text
-          onMouseDown={() => {
-            themeBeforePreview = theme();
-            setModal("theme-picker");
-          }}
-        >
-          <span style={{ fg: P().overlay0 }}>{"  "}</span>
-          <span style={{ fg: P().overlay0, attributes: DIM }}>{"settings"}</span>
-        </text>
+        <box flexDirection="row">
+          <text
+            onMouseDown={() => {
+              themeBeforePreview = theme();
+              setModal("theme-picker");
+            }}
+          >
+            <span style={{ fg: P().overlay0, attributes: DIM }}>{"  theme"}</span>
+          </text>
+          <text>
+            <span style={{ fg: P().surface2 }}>{" · "}</span>
+          </text>
+          <text
+            onMouseDown={() => setModal("spacing-picker")}
+          >
+            <span style={{ fg: P().overlay0, attributes: DIM }}>{"spacing"}</span>
+          </text>
+        </box>
       </box>
 
       {/* Theme picker overlay */}
@@ -792,6 +814,62 @@ function App() {
             setModal("none");
           }}
         />
+      </Show>
+
+      {/* Spacing picker overlay */}
+      <Show when={modal() === "spacing-picker"}>
+        <box
+          position="absolute"
+          top={0} left={0} right={0} bottom={0}
+          justifyContent="center"
+          alignItems="center"
+          backgroundColor="transparent"
+        >
+          <box
+            border
+            borderStyle="rounded"
+            borderColor={P().blue}
+            backgroundColor={P().mantle}
+            padding={1}
+            flexDirection="column"
+            width={24}
+          >
+            <text>
+              <span style={{ fg: P().blue, attributes: BOLD }}>Spacing</span>
+            </text>
+            <box height={1}><text style={{ fg: P().surface2 }}>{"─".repeat(200)}</text></box>
+            <For each={[0, 1, 2]}>
+              {(val) => {
+                const label = () => val === 0 ? "tight" : val === 1 ? "relaxed" : "roomy";
+                const isSel = () => sidebarSpacing() === val;
+                return (
+                  <box
+                    paddingLeft={1}
+                    paddingRight={1}
+                    backgroundColor={isSel() ? P().surface0 : undefined}
+                    onMouseDown={() => {
+                      setSidebarSpacing(val);
+                      send({ type: "set-theme", theme: "" });
+                      saveConfig({ sidebarSpacing: val });
+                      setModal("none");
+                    }}
+                  >
+                    <text style={{ fg: isSel() ? P().text : P().subtext0 }}>
+                      <span>{isSel() ? "▸ " : "  "}</span>
+                      <span>{label()}</span>
+                      <span style={{ fg: P().overlay0, attributes: DIM }}>{" "}{String(val)}</span>
+                    </text>
+                  </box>
+                );
+              }}
+            </For>
+            <box height={1}><text style={{ fg: P().surface2 }}>{"─".repeat(200)}</text></box>
+            <text style={{ fg: P().overlay0 }}>
+              <span style={{ attributes: DIM }}>click</span>{" select  "}
+              <span style={{ attributes: DIM }}>esc</span>{" close"}
+            </text>
+          </box>
+        </box>
       </Show>
 
       {/* Kill confirmation overlay */}
