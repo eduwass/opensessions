@@ -302,7 +302,7 @@ function buildWindowData(
   if (!winRaw) return [];
 
   const paneRaw = shell(["tmux", "list-panes", "-s", "-t", sessionName,
-    "-F", "#{pane_id}\t#{window_id}\t#{pane_title}\t#{pane_current_command}\t#{pane_pid}"]);
+    "-F", "#{pane_id}\t#{window_id}\t#{pane_title}\t#{pane_current_command}\t#{pane_pid}\t#{pane_active}"]);
 
   // Parse windows
   const windowsList: { id: string; index: number; name: string; active: boolean }[] = [];
@@ -313,14 +313,20 @@ function buildWindowData(
   }
 
   // Parse panes grouped by window
-  const panesByWindow = new Map<string, { id: string; title: string; command: string; pid: number }[]>();
+  const panesByWindow = new Map<string, { id: string; title: string; command: string; pid: number; active: boolean }[]>();
   for (const line of (paneRaw ?? "").split("\n")) {
-    const [paneId, windowId, title, command, pidStr] = line.split("\t");
+    const parts = line.split("\t");
+    const paneId = parts[0];
+    const windowId = parts[1];
+    const title = parts[2] ?? "";
+    const command = parts[3] ?? "";
+    const pidStr = parts[4] ?? "0";
+    const paneActive = parts[5] === "1";
     if (!paneId || !windowId) continue;
-    if (SIDEBAR_TITLES.has(title ?? "")) continue;
+    if (SIDEBAR_TITLES.has(title)) continue;
     let list = panesByWindow.get(windowId);
     if (!list) { list = []; panesByWindow.set(windowId, list); }
-    list.push({ id: paneId, title: title ?? "", command: command ?? "", pid: parseInt(pidStr, 10) });
+    list.push({ id: paneId, title, command, pid: parseInt(pidStr, 10), active: paneActive });
   }
 
   // Build port→pane and pane→port mappings
@@ -369,6 +375,7 @@ function buildWindowData(
         id: pane.id,
         title: pane.title,
         command: pane.command,
+        active: pane.active && win.active,
         type,
         agentStatus: agent?.status,
         agentUnseen: agent?.unseen,

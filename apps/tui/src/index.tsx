@@ -1296,9 +1296,9 @@ function SessionCard(props: SessionCardProps) {
                             onMouseDown={() => props.onFocusPane(pane.id)}
                           >
                             <text truncate>
-                              <span style={{ fg: P().surface2 }}>{prefix()}</span>
+                              <span style={{ fg: pane.active ? P().green : P().surface2 }}>{prefix()}</span>
                               <span style={{ fg: paneDotColor(pane) }}>{paneDot(pane)}</span>
-                              <span style={{ fg: paneLabelColor(pane) }}>{" "}{paneLabel(pane)}</span>
+                              <span style={{ fg: pane.active ? P().text : paneLabelColor(pane), attributes: pane.active ? BOLD : undefined }}>{" "}{paneLabel(pane)}</span>
                             </text>
                           </box>
                         </box>

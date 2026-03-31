@@ -11,6 +11,7 @@ export interface PaneData {
   id: string;
   title: string;
   command: string;
+  active: boolean;
   /** "agent" = claude/cursor/etc, "dev" = dev server with port, "shell" = regular shell */
   type: "agent" | "dev" | "shell";
   /** Agent status if type === "agent" */
