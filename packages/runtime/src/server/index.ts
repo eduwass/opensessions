@@ -1779,7 +1779,10 @@ export function startServer(mux: MuxProvider, extraProviders?: MuxProvider[], wa
         break;
       case "focus-pane":
         try {
+          // Switch to the window containing this pane, then select the pane
+          Bun.spawnSync(["tmux", "select-window", "-t", cmd.paneId], { stdout: "pipe", stderr: "pipe" });
           Bun.spawnSync(["tmux", "select-pane", "-t", cmd.paneId], { stdout: "pipe", stderr: "pipe" });
+          broadcastState();
         } catch {}
         break;
       case "select-window":

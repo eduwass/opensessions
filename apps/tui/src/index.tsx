@@ -1290,13 +1290,7 @@ function SessionCard(props: SessionCardProps) {
 
                           {/* Pane row */}
                           <box flexDirection="row"
-                            onMouseDown={() => {
-                              if (pane.type === "dev" && pane.exposedSite) {
-                                props.onFocusExposedPane(pane.exposedSite.port);
-                              } else {
-                                props.onFocusPane(pane.id);
-                              }
-                            }}
+                            onMouseDown={() => props.onFocusPane(pane.id)}
                           >
                             <text truncate>
                               <span style={{ fg: P().surface2 }}>{prefix()}</span>
