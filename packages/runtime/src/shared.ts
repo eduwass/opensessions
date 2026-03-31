@@ -73,6 +73,7 @@ export interface ServerState {
   sidebarTreeLines: boolean;
   sidebarWindowBadge: boolean;
   sidebarWindowNumbers: boolean;
+  sidebarCollapseWindows: boolean;
   exposedSites: ExposedSite[];
   ts: number;
 }

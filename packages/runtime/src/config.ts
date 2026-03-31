@@ -28,6 +28,8 @@ export interface OpensessionsConfig {
   sidebarWindowBadge?: boolean;
   /** Show window numbers (default true) */
   sidebarWindowNumbers?: boolean;
+  /** Collapse inactive windows to just header (default false) */
+  sidebarCollapseWindows?: boolean;
 }
 
 const DEFAULTS: OpensessionsConfig = {
