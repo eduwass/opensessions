@@ -764,6 +764,9 @@ function App() {
               onFocusExposedPane={(port) => {
                 send({ type: "focus-exposed-pane", port });
               }}
+              onSelectWindow={(windowId) => {
+                send({ type: "select-window", session: session.name, windowId });
+              }}
             />
           )}
         </For>
@@ -1089,6 +1092,7 @@ interface SessionCardProps {
   onSelect: () => void;
   onFocusPane: (paneId: string) => void;
   onFocusExposedPane: (port: number) => void;
+  onSelectWindow: (windowId: string) => void;
 }
 
 function SessionCard(props: SessionCardProps) {
@@ -1250,8 +1254,10 @@ function SessionCard(props: SessionCardProps) {
                     <box height={wi() === 0 ? sp() : 1} />
                   </Show>
 
-                  {/* Window header: index badge + name */}
-                  <box flexDirection="row">
+                  {/* Window header: index badge + name (click to switch) */}
+                  <box flexDirection="row"
+                    onMouseDown={() => props.onSelectWindow(win.id)}
+                  >
                     <text flexShrink={0}>
                       <span style={{
                         fg: win.active ? P().crust : P().overlay0,

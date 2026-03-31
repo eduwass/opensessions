@@ -1782,6 +1782,12 @@ export function startServer(mux: MuxProvider, extraProviders?: MuxProvider[], wa
           Bun.spawnSync(["tmux", "select-pane", "-t", cmd.paneId], { stdout: "pipe", stderr: "pipe" });
         } catch {}
         break;
+      case "select-window":
+        try {
+          Bun.spawnSync(["tmux", "select-window", "-t", `${cmd.session}:${cmd.windowId}`], { stdout: "pipe", stderr: "pipe" });
+          broadcastState();
+        } catch {}
+        break;
       case "kill-agent-pane":
         log("handleCommand", "kill-agent-pane received", { session: cmd.session, agent: cmd.agent, threadId: cmd.threadId, threadName: cmd.threadName });
         killAgentPane(cmd.session, cmd.agent, cmd.threadId, cmd.threadName);

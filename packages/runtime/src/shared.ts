@@ -152,6 +152,7 @@ export type ClientCommand =
   | { type: "kill-agent-pane"; session: string; agent: string; threadId?: string; threadName?: string }
   | { type: "focus-exposed-pane"; port: number }
   | { type: "focus-pane"; paneId: string }
+  | { type: "select-window"; session: string; windowId: string }
   | { type: "report-width"; width: number };
 
 // Catppuccin Mocha palette
