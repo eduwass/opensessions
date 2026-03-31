@@ -71,6 +71,8 @@ export interface ServerState {
   sidebarWidth: number;
   sidebarSpacing: number;
   sidebarTreeLines: boolean;
+  sidebarWindowBadge: boolean;
+  sidebarWindowNumbers: boolean;
   exposedSites: ExposedSite[];
   ts: number;
 }

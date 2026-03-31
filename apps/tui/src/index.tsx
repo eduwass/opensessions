@@ -183,6 +183,8 @@ function App() {
   const [exposedSites, setExposedSites] = createSignal<ExposedSite[]>([]);
   const [sidebarSpacing, setSidebarSpacing] = createSignal(1);
   const [sidebarTreeLines, setSidebarTreeLines] = createSignal(true);
+  const [sidebarWindowBadge, setSidebarWindowBadge] = createSignal(true);
+  const [sidebarWindowNumbers, setSidebarWindowNumbers] = createSignal(true);
   const detailPanelSessionName = createMemo(() => focusedSession() ?? mySession());
 
   // --- Panel focus: sessions list vs agent detail ---
@@ -191,7 +193,7 @@ function App() {
   const [focusedAgentIdx, setFocusedAgentIdx] = createSignal(0);
 
   // --- Modal state ---
-  const [modal, setModal] = createSignal<"none" | "spacing-picker" | "theme-picker" | "confirm-kill">("none");
+  const [modal, setModal] = createSignal<"none" | "settings" | "theme-picker" | "confirm-kill">("none");
   const [killTarget, setKillTarget] = createSignal<string | null>(null);
   let themeBeforePreview: Theme | null = null;
 
@@ -494,6 +496,8 @@ function App() {
             if (msg.exposedSites) setExposedSites(msg.exposedSites);
             if (msg.sidebarSpacing != null) setSidebarSpacing(msg.sidebarSpacing);
             if (msg.sidebarTreeLines != null) setSidebarTreeLines(msg.sidebarTreeLines);
+            if (msg.sidebarWindowBadge != null) setSidebarWindowBadge(msg.sidebarWindowBadge);
+            if (msg.sidebarWindowNumbers != null) setSidebarWindowNumbers(msg.sidebarWindowNumbers);
           } else if (msg.type === "focus") {
             setFocusedSession(msg.focusedSession);
             setCurrentSession(msg.currentSession);
@@ -580,14 +584,9 @@ function App() {
       return;
     }
 
-    // --- Spacing picker modal ---
-    if (currentModal === "spacing-picker") {
+    // --- Settings modal ---
+    if (currentModal === "settings") {
       if (key.name === "escape") {
-        setModal("none");
-      } else if (key.name === "1" || key.name === "0" || key.name === "2") {
-        const val = parseInt(key.name, 10);
-        setSidebarSpacing(val);
-        saveConfig({ sidebarSpacing: val });
         setModal("none");
       }
       return;
@@ -756,6 +755,8 @@ function App() {
               theme={theme}
               spacing={sidebarSpacing}
               treeLines={sidebarTreeLines}
+              windowBadge={sidebarWindowBadge}
+              windowNumbers={sidebarWindowNumbers}
               onSelect={() => {
                 setFocusedSession(session.name);
                 send({ type: "focus-session", name: session.name });
@@ -780,36 +781,10 @@ function App() {
         <box height={1}>
           <text style={{ fg: P().surface2 }}>{"─".repeat(200)}</text>
         </box>
-        <box flexDirection="row">
-          <text
-            onMouseDown={() => {
-              themeBeforePreview = theme();
-              setModal("theme-picker");
-            }}
-          >
-            <span style={{ fg: P().overlay0, attributes: DIM }}>{"  theme"}</span>
-          </text>
-          <text>
-            <span style={{ fg: P().surface2 }}>{" · "}</span>
-          </text>
-          <text
-            onMouseDown={() => setModal("spacing-picker")}
-          >
-            <span style={{ fg: P().overlay0, attributes: DIM }}>{"spacing"}</span>
-          </text>
-          <text>
-            <span style={{ fg: P().surface2 }}>{" · "}</span>
-          </text>
-          <text
-            onMouseDown={() => {
-              const next = !sidebarTreeLines();
-              setSidebarTreeLines(next);
-              saveConfig({ sidebarTreeLines: next });
-            }}
-          >
-            <span style={{ fg: P().overlay0, attributes: DIM }}>{sidebarTreeLines() ? "lines ✓" : "lines ✗"}</span>
-          </text>
-        </box>
+        <text onMouseDown={() => setModal("settings")}>
+          <span style={{ fg: P().overlay0 }}>{"  "}</span>
+          <span style={{ fg: P().overlay0, attributes: DIM }}>{"settings"}</span>
+        </text>
       </box>
 
       {/* Theme picker overlay */}
@@ -834,8 +809,8 @@ function App() {
         />
       </Show>
 
-      {/* Spacing picker overlay */}
-      <Show when={modal() === "spacing-picker"}>
+      {/* Settings panel overlay */}
+      <Show when={modal() === "settings"}>
         <box
           position="absolute"
           top={0} left={0} right={0} bottom={0}
@@ -850,41 +825,75 @@ function App() {
             backgroundColor={P().mantle}
             padding={1}
             flexDirection="column"
-            width={24}
+            width={28}
           >
             <text>
-              <span style={{ fg: P().blue, attributes: BOLD }}>Spacing</span>
+              <span style={{ fg: P().blue, attributes: BOLD }}>{"  Settings"}</span>
             </text>
             <box height={1}><text style={{ fg: P().surface2 }}>{"─".repeat(200)}</text></box>
+
+            {/* Spacing */}
+            <text><span style={{ fg: P().overlay1, attributes: DIM }}>{"Spacing"}</span></text>
             <For each={[0, 1, 2]}>
               {(val) => {
                 const label = () => val === 0 ? "tight" : val === 1 ? "relaxed" : "roomy";
                 const isSel = () => sidebarSpacing() === val;
                 return (
-                  <box
-                    paddingLeft={1}
-                    paddingRight={1}
+                  <box paddingLeft={1} paddingRight={1}
                     backgroundColor={isSel() ? P().surface0 : undefined}
-                    onMouseDown={() => {
-                      setSidebarSpacing(val);
-                      send({ type: "set-theme", theme: "" });
-                      saveConfig({ sidebarSpacing: val });
-                      setModal("none");
-                    }}
+                    onMouseDown={() => { setSidebarSpacing(val); saveConfig({ sidebarSpacing: val }); }}
                   >
                     <text style={{ fg: isSel() ? P().text : P().subtext0 }}>
-                      <span>{isSel() ? "▸ " : "  "}</span>
-                      <span>{label()}</span>
-                      <span style={{ fg: P().overlay0, attributes: DIM }}>{" "}{String(val)}</span>
+                      <span>{isSel() ? "▸ " : "  "}{label()}</span>
                     </text>
                   </box>
                 );
               }}
             </For>
+
+            <box height={1} />
+
+            {/* Toggles */}
+            <text><span style={{ fg: P().overlay1, attributes: DIM }}>{"Display"}</span></text>
+            <box paddingLeft={1}
+              onMouseDown={() => { const v = !sidebarTreeLines(); setSidebarTreeLines(v); saveConfig({ sidebarTreeLines: v }); }}
+            >
+              <text style={{ fg: P().subtext0 }}>
+                <span style={{ fg: sidebarTreeLines() ? P().green : P().surface2 }}>{sidebarTreeLines() ? "✓ " : "✗ "}</span>
+                <span>{"Tree lines"}</span>
+              </text>
+            </box>
+            <box paddingLeft={1}
+              onMouseDown={() => { const v = !sidebarWindowBadge(); setSidebarWindowBadge(v); saveConfig({ sidebarWindowBadge: v }); }}
+            >
+              <text style={{ fg: P().subtext0 }}>
+                <span style={{ fg: sidebarWindowBadge() ? P().green : P().surface2 }}>{sidebarWindowBadge() ? "✓ " : "✗ "}</span>
+                <span>{"Window badge"}</span>
+              </text>
+            </box>
+            <box paddingLeft={1}
+              onMouseDown={() => { const v = !sidebarWindowNumbers(); setSidebarWindowNumbers(v); saveConfig({ sidebarWindowNumbers: v }); }}
+            >
+              <text style={{ fg: P().subtext0 }}>
+                <span style={{ fg: sidebarWindowNumbers() ? P().green : P().surface2 }}>{sidebarWindowNumbers() ? "✓ " : "✗ "}</span>
+                <span>{"Window numbers"}</span>
+              </text>
+            </box>
+
+            <box height={1} />
+
+            {/* Theme */}
+            <box paddingLeft={1}
+              onMouseDown={() => { themeBeforePreview = theme(); setModal("theme-picker"); }}
+            >
+              <text style={{ fg: P().subtext0 }}>
+                <span>{"  Change theme"}</span>
+              </text>
+            </box>
+
             <box height={1}><text style={{ fg: P().surface2 }}>{"─".repeat(200)}</text></box>
             <text style={{ fg: P().overlay0 }}>
-              <span style={{ attributes: DIM }}>click</span>{" select  "}
-              <span style={{ attributes: DIM }}>esc</span>{" close"}
+              <span style={{ attributes: DIM }}>{"esc"}</span>{" close"}
             </text>
           </box>
         </box>
@@ -1105,6 +1114,8 @@ interface SessionCardProps {
   theme: Accessor<Theme>;
   spacing: Accessor<number>;
   treeLines: Accessor<boolean>;
+  windowBadge: Accessor<boolean>;
+  windowNumbers: Accessor<boolean>;
   onSelect: () => void;
   onFocusPane: (paneId: string) => void;
   onFocusExposedPane: (port: number) => void;
@@ -1275,16 +1286,25 @@ function SessionCard(props: SessionCardProps) {
                   <box flexDirection="row"
                     onMouseDown={() => props.onSelectWindow(win.id)}
                   >
-                    <text flexShrink={0}>
-                      <span style={{
-                        fg: win.active ? P().crust : P().overlay0,
-                        bg: win.active ? P().green : P().surface2,
-                        attributes: BOLD,
-                      }}>{" "}{String(win.index)}{" "}</span>
-                    </text>
+                    <Show when={props.windowNumbers()}>
+                      <text flexShrink={0}>
+                        <Show when={props.windowBadge()} fallback={
+                          <span style={{
+                            fg: win.active ? P().green : P().overlay0,
+                            attributes: win.active ? BOLD : undefined,
+                          }}>{String(win.index)}</span>
+                        }>
+                          <span style={{
+                            fg: win.active ? P().crust : P().overlay0,
+                            bg: win.active ? P().green : P().surface2,
+                            attributes: BOLD,
+                          }}>{" "}{String(win.index)}{" "}</span>
+                        </Show>
+                      </text>
+                    </Show>
                     <text truncate>
                       <span style={{ fg: win.active ? P().subtext1 : P().overlay0 }}>
-                        {" "}{win.name}
+                        {props.windowNumbers() ? " " : ""}{win.name}
                       </span>
                     </text>
                   </box>

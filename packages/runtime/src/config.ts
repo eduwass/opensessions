@@ -24,6 +24,10 @@ export interface OpensessionsConfig {
   sidebarSpacing?: number;
   /** Show tree lines (├ └ │) in the sidebar (default true) */
   sidebarTreeLines?: boolean;
+  /** Show background badge behind window numbers (default true) */
+  sidebarWindowBadge?: boolean;
+  /** Show window numbers (default true) */
+  sidebarWindowNumbers?: boolean;
 }
 
 const DEFAULTS: OpensessionsConfig = {
