@@ -769,7 +769,7 @@ function App() {
                 switchToSession(session.name);
               }}
               onFocusPane={(paneId) => {
-                send({ type: "focus-pane", paneId });
+                send({ type: "focus-pane", paneId, session: session.name });
               }}
               onFocusExposedPane={(port) => {
                 send({ type: "focus-exposed-pane", port });
@@ -822,7 +822,7 @@ function App() {
           top={0} left={0} right={0} bottom={0}
           justifyContent="center"
           alignItems="center"
-          backgroundColor="transparent"
+          backgroundColor={P().base}
         >
           <box
             border
@@ -914,9 +914,11 @@ function App() {
             </box>
 
             <box height={1}><text style={{ fg: P().surface2 }}>{"─".repeat(200)}</text></box>
-            <text style={{ fg: P().overlay0 }}>
-              <span style={{ attributes: DIM }}>{"esc"}</span>{" close"}
-            </text>
+            <box onMouseDown={() => setModal("none")}>
+              <text style={{ fg: P().overlay0 }}>
+                <span style={{ attributes: DIM }}>{"esc"}</span>{" close"}
+              </text>
+            </box>
           </box>
         </box>
       </Show>

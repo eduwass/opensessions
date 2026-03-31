@@ -1824,6 +1824,13 @@ export function startServer(mux: MuxProvider, extraProviders?: MuxProvider[], wa
         focusExposedPane(cmd.port);
         break;
       case "focus-pane":
+        if (cmd.session) {
+          const provider = sessionProviders.get(cmd.session);
+          if (provider) {
+            const clientTty = clientTtys.get(ws) ?? undefined;
+            provider.switchSession(cmd.session, clientTty);
+          }
+        }
         focusAndHighlightPane(cmd.paneId);
         broadcastState();
         break;

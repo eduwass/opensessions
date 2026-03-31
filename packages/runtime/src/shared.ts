@@ -157,7 +157,7 @@ export type ClientCommand =
   | { type: "focus-agent-pane"; session: string; agent: string; threadId?: string; threadName?: string }
   | { type: "kill-agent-pane"; session: string; agent: string; threadId?: string; threadName?: string }
   | { type: "focus-exposed-pane"; port: number }
-  | { type: "focus-pane"; paneId: string }
+  | { type: "focus-pane"; paneId: string; session?: string }
   | { type: "select-window"; session: string; windowId: string }
   | { type: "report-width"; width: number };
 
