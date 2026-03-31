@@ -1210,16 +1210,24 @@ function SessionCard(props: SessionCardProps) {
     return "▌";
   };
 
+  const BRAILLE_RE_SESSION = /[\u2800-\u28FF]/;
+  const hasRunningPane = () =>
+    (props.session.windowData ?? []).some((w) =>
+      w.panes.some((p) => p.type === "agent" && !TERMINAL_STATUSES_SESSION.has(p.agentStatus ?? "") && BRAILLE_RE_SESSION.test(p.title.charAt(0)))
+    );
+  const TERMINAL_STATUSES_SESSION = new Set(["done", "error", "interrupted"]);
+  const isSessionRunning = () => status() === "running" || hasRunningPane();
+
   const statusDot = () => {
+    if (isSessionRunning()) return SPINNERS[props.spinIdx() % SPINNERS.length]!;
     const s = status();
-    if (s === "running") return SPINNERS[props.spinIdx() % SPINNERS.length]!;
     if (["done", "error", "interrupted"].includes(s)) return "●";
     return "";
   };
 
   const statusDotColor = () => {
+    if (isSessionRunning()) return P().yellow;
     const s = status();
-    if (s === "running") return P().yellow;
     if (s === "done") return P().green;
     if (s === "error") return P().red;
     if (s === "interrupted") return P().peach;
@@ -1259,19 +1267,22 @@ function SessionCard(props: SessionCardProps) {
   };
 
   const paneDot = (pane: PaneData) => {
-    if (pane.type === "agent" && isPaneRunning(pane))
-      return SPINNERS[props.spinIdx() % SPINNERS.length]!;
-    if (pane.type === "agent") return "●";
+    if (pane.type === "agent") {
+      if (isPaneRunning(pane)) return SPINNERS[props.spinIdx() % SPINNERS.length]!;
+      if (pane.agentStatus === "done") return "●";
+      if (pane.agentStatus === "error") return "●";
+      if (pane.agentStatus === "interrupted") return "●";
+      return "●";
+    }
     if (pane.type === "dev") return "●";
     return "○";
   };
 
   const paneDotColor = (pane: PaneData) => {
-    // Active pane: green icon
     if (pane.active) return P().green;
-    // Inactive: dim/muted
     if (pane.type === "agent") {
       if (isPaneRunning(pane)) return P().yellow;
+      if (pane.agentStatus === "done") return P().green;
       if (pane.agentStatus === "error") return P().red;
       if (pane.agentUnseen) return P().teal;
       return P().surface2;
