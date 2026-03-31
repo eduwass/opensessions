@@ -296,6 +296,7 @@ function buildWindowData(
   sessionPorts: number[],
   sessionAgents: AgentEvent[],
   exposedSites: ExposedSite[],
+  seenPanes: Set<string>,
 ): import("../shared").WindowData[] {
   // Get windows and panes from tmux directly
   const winRaw = shell(["tmux", "list-windows", "-t", sessionName, "-F", "#{window_id}\t#{window_index}\t#{window_name}\t#{window_active}"]);
@@ -707,7 +708,7 @@ export function startServer(mux: MuxProvider, extraProviders?: MuxProvider[], wa
 
       const ports = getSessionPorts(name);
       const agents = mergeAgentsWithPanePresence(name, tracker.getAgents(name));
-      const windowData = buildWindowData(name, ports, agents, cachedExposedSites);
+      const windowData = buildWindowData(name, ports, agents, cachedExposedSites, seenPanes);
 
       // Propagate unmatched unseen agents to panes that look done but have no unseen flag
       // This handles the case where the tracker can't match its paneId to a specific pane
