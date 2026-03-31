@@ -1306,6 +1306,33 @@ export function startServer(mux: MuxProvider, extraProviders?: MuxProvider[], wa
     );
   }
 
+  /** Flash-highlight all panes in a window, then reset after PANE_HIGHLIGHT_MS. */
+  function highlightAllPanesInWindow(sessionName: string, windowId: string): void {
+    const raw = shell(["tmux", "list-panes", "-t", `${sessionName}:${windowId}`, "-F", "#{pane_id}\t#{pane_title}"]);
+    if (!raw) return;
+    const paneIds = raw.split("\n")
+      .map((l) => l.split("\t"))
+      .filter(([_id, title]) => title !== "sidebar" && title !== "opensessions-sidebar")
+      .map(([id]) => id)
+      .filter(Boolean);
+
+    for (const paneId of paneIds) {
+      const existing = pendingHighlightResets.get(paneId);
+      if (existing) clearTimeout(existing);
+
+      shell(["tmux", "select-pane", "-t", paneId, "-P", "bg=#2a2a4a"]);
+      shell(["tmux", "set-option", "-p", "-t", paneId, "pane-active-border-style", PANE_HIGHLIGHT_BORDER]);
+      pendingHighlightResets.set(
+        paneId,
+        setTimeout(() => {
+          shell(["tmux", "set-option", "-p", "-t", paneId, "-u", "pane-active-border-style"]);
+          shell(["tmux", "select-pane", "-t", paneId, "-P", ""]);
+          pendingHighlightResets.delete(paneId);
+        }, PANE_HIGHLIGHT_MS),
+      );
+    }
+  }
+
   function focusAgentPane(sessionName: string, agentName: string, threadId?: string, threadName?: string): void {
     log("focus-agent-pane", "received", { sessionName, agentName, threadId, threadName });
     const targetPaneId = resolveAgentPaneId(sessionName, agentName, threadId, threadName);
@@ -1784,6 +1811,7 @@ export function startServer(mux: MuxProvider, extraProviders?: MuxProvider[], wa
       case "select-window":
         try {
           Bun.spawnSync(["tmux", "select-window", "-t", `${cmd.session}:${cmd.windowId}`], { stdout: "pipe", stderr: "pipe" });
+          highlightAllPanesInWindow(cmd.session, cmd.windowId);
           broadcastState();
         } catch {}
         break;
