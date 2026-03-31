@@ -402,14 +402,31 @@ function buildWindowData(
         type = "dev";
       }
 
+      const isActive = pane.active && win.active;
+
+      // Determine unseen: tracker flag OR inferred from pane state
+      // Tracker misses same-session agents, so we infer: done title + not active + not seen
+      const DONE_TITLE = /^[✳✱]/;
+      const trackerUnseen = agent?.unseen ?? false;
+      const isDoneTitle = type === "agent" && DONE_TITLE.test(pane.title);
+      const isRunningTitle = type === "agent" && /^[\u2800-\u28FF]/.test(pane.title.charAt(0));
+
+      // Clear seen status when pane starts running again
+      if (isRunningTitle) seenPanes.delete(pane.id);
+
+      // Mark as seen when active
+      if (isActive && isDoneTitle) seenPanes.add(pane.id);
+
+      const inferredUnseen = isDoneTitle && !isActive && !seenPanes.has(pane.id);
+
       panes.push({
         id: pane.id,
         title: pane.title,
         command: pane.command,
-        active: pane.active && win.active,
+        active: isActive,
         type,
         agentStatus: agent?.status,
-        agentUnseen: agent?.unseen,
+        agentUnseen: trackerUnseen || inferredUnseen,
         port,
         exposedSite: exposed,
       });
@@ -496,6 +513,8 @@ export function startServer(mux: MuxProvider, extraProviders?: MuxProvider[], wa
   let sidebarWidth = clampSidebarWidth(config.sidebarWidth ?? 26);
   let sidebarPosition: "left" | "right" = config.sidebarPosition ?? "left";
   let sidebarVisible = false;
+  // Track panes that user has seen (by paneId) — cleared when pane starts running again
+  const seenPanes = new Set<string>();
 
   // The sidebar launcher lives with the TUI app, not the tmux integration layer.
   const scriptsDir = (() => {
@@ -1893,6 +1912,8 @@ export function startServer(mux: MuxProvider, extraProviders?: MuxProvider[], wa
             const clientTty = clientTtys.get(ws) ?? undefined;
             provider.switchSession(cmd.session, clientTty);
           }
+          // Mark pane as seen (for inferred unseen)
+          seenPanes.add(cmd.paneId);
           // Mark agents in this pane as seen (both matched and unmatched)
           const sessionAgents = tracker.getAgents(cmd.session);
           // Get the pane title to match unmatched agents
