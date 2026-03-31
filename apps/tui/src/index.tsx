@@ -1300,8 +1300,8 @@ function SessionCard(props: SessionCardProps) {
         </Show>
       </box>
 
-      {/* Collapsed: folder · branch */}
-      <Show when={!props.isFocused && props.collapseSessions() && collapsedInfo()}>
+      {/* Folder · branch (always shown when available) */}
+      <Show when={collapsedInfo()}>
         <box paddingLeft={3}>
           <text truncate>
             <span style={{ fg: P().overlay0, attributes: DIM }}>{collapsedInfo()}</span>
