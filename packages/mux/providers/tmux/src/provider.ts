@@ -103,6 +103,7 @@ export class TmuxProvider implements MuxProviderV1, WindowCapable, SidebarCapabl
     tmux.setGlobalHook("session-created", refreshCmd);
     tmux.setGlobalHook("session-closed", refreshCmd);
     tmux.setGlobalHook("after-select-window", `${refreshCmd} ; ${ensureCmd}`);
+    tmux.setGlobalHook("after-select-pane", refreshCmd);
     tmux.setGlobalHook("after-new-window", ensureCmd);
     // client-resized: terminal window changed size — enforce stored width back
     tmux.setGlobalHook("client-resized", clientResizedCmd);
@@ -116,6 +117,7 @@ export class TmuxProvider implements MuxProviderV1, WindowCapable, SidebarCapabl
     tmux.unsetGlobalHook("session-created");
     tmux.unsetGlobalHook("session-closed");
     tmux.unsetGlobalHook("after-select-window");
+    tmux.unsetGlobalHook("after-select-pane");
     tmux.unsetGlobalHook("after-new-window");
     tmux.unsetGlobalHook("client-resized");
     tmux.unsetGlobalHook("after-resize-pane");
