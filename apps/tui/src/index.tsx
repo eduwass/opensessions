@@ -1384,7 +1384,7 @@ function SessionCard(props: SessionCardProps) {
                               <span style={{ fg: P().surface2 }}>{prefix()}</span>
                               <span style={{ fg: paneDotColor(pane) }}>{paneDot(pane)}</span>
                               <span style={{ fg: paneLabelColor(pane), attributes: pane.active ? BOLD : DIM }}>
-                                {pane.active ? " ▸ " : "  "}{paneLabel(pane)}
+                                {" "}{paneLabel(pane)}
                               </span>
                             </text>
                           </box>
