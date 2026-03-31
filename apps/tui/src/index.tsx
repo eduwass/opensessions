@@ -1250,15 +1250,21 @@ function SessionCard(props: SessionCardProps) {
                     <box height={1} />
                   </Show>
 
-                  {/* Window header: index + name */}
-                  <text truncate>
-                    <span style={{ fg: win.active ? P().green : P().overlay0, attributes: win.active ? BOLD : undefined }}>
-                      {String(win.index)}
-                    </span>
-                    <span style={{ fg: win.active ? P().subtext1 : P().overlay0 }}>
-                      {" "}{win.name}
-                    </span>
-                  </text>
+                  {/* Window header: index badge + name */}
+                  <box flexDirection="row">
+                    <text flexShrink={0}>
+                      <span style={{
+                        fg: win.active ? P().crust : P().overlay0,
+                        bg: win.active ? P().green : P().surface2,
+                        attributes: BOLD,
+                      }}>{" "}{String(win.index)}{" "}</span>
+                    </text>
+                    <text truncate>
+                      <span style={{ fg: win.active ? P().subtext1 : P().overlay0 }}>
+                        {" "}{win.name}
+                      </span>
+                    </text>
+                  </box>
 
                   {/* Panes under this window */}
                   <For each={win.panes}>
