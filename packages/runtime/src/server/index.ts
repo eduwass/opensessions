@@ -458,6 +458,7 @@ export function startServer(mux: MuxProvider, extraProviders?: MuxProvider[], wa
   let sidebarWidth = clampSidebarWidth(config.sidebarWidth ?? 26);
   let sidebarPosition: "left" | "right" = config.sidebarPosition ?? "left";
   let sidebarVisible = false;
+  let lastWindowHighlight: { key: string; ts: number } | null = null;
 
   // The sidebar launcher lives with the TUI app, not the tmux integration layer.
   const scriptsDir = (() => {
@@ -1815,14 +1816,12 @@ export function startServer(mux: MuxProvider, extraProviders?: MuxProvider[], wa
         broadcastState();
         break;
       case "select-window":
-        log("select-window", "received", { session: cmd.session, windowId: cmd.windowId });
         try {
           Bun.spawnSync(["tmux", "select-window", "-t", `${cmd.session}:${cmd.windowId}`], { stdout: "pipe", stderr: "pipe" });
           highlightAllPanesInWindow(cmd.session, cmd.windowId);
+          lastWindowHighlight = { key: `${cmd.session}:${cmd.windowId}`, ts: Date.now() };
           broadcastState();
-        } catch (err) {
-          log("select-window", "error", { error: String(err) });
-        }
+        } catch {}
         break;
       case "kill-agent-pane":
         log("handleCommand", "kill-agent-pane received", { session: cmd.session, agent: cmd.agent, threadId: cmd.threadId, threadName: cmd.threadName });
@@ -1970,6 +1969,21 @@ export function startServer(mux: MuxProvider, extraProviders?: MuxProvider[], wa
       }
 
       // pane-exited hook: a pane closed — kill orphaned sidebar panes
+      if (req.method === "POST" && url.pathname === "/highlight-window") {
+        const body = await req.text();
+        const [sessionName, windowId] = body.split("|");
+        if (sessionName && windowId) {
+          // Debounce: skip if we already highlighted this window recently (from sidebar click)
+          const key = `${sessionName}:${windowId}`;
+          const now = Date.now();
+          if (!lastWindowHighlight || lastWindowHighlight.key !== key || now - lastWindowHighlight.ts > 400) {
+            highlightAllPanesInWindow(sessionName, windowId);
+            lastWindowHighlight = { key, ts: now };
+          }
+        }
+        return new Response("ok", { status: 200 });
+      }
+
       if (req.method === "POST" && url.pathname === "/pane-exited") {
         if (sidebarVisible) {
           invalidateSidebarPaneCache();
