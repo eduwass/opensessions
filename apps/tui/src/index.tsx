@@ -1288,32 +1288,32 @@ function SessionCard(props: SessionCardProps) {
   return (
     <box flexDirection="column" flexShrink={0}>
       {/* Session header block — name + folder·branch as one unit */}
-      <box flexDirection="row" onMouseDown={props.onSelect}
+      <box flexDirection="column" onMouseDown={props.onSelect}
         backgroundColor={props.isFocused && props.highlightSession() ? P().surface0 : undefined}
       >
-        {/* Left accent bar spanning full height */}
-        <text style={{ fg: accentColor() }}>{accentColor() === "transparent" ? " " : "▌"}</text>
-
-        {/* Content: name on top, folder·branch below */}
-        <box flexDirection="column" flexGrow={1} paddingRight={1}>
-          <box flexDirection="row">
-            <text truncate flexGrow={1}>
-              <span style={{ fg: nameColor(), attributes: props.isFocused || props.isCurrent ? BOLD : undefined }}>
-                {" "}{truncName()}
-              </span>
-            </text>
-            <Show when={statusDot()}>
-              <text flexShrink={0}>
-                <span style={{ fg: statusDotColor() }}>{statusDot()}{" "}</span>
-              </text>
-            </Show>
-          </box>
-          <Show when={collapsedInfo()}>
-            <text truncate>
-              <span style={{ fg: P().overlay0, attributes: DIM }}>{" "}{collapsedInfo()}</span>
+        {/* Row 1: accent + name + status */}
+        <box flexDirection="row">
+          <text style={{ fg: accentColor() }}>{accentChar()}</text>
+          <text truncate flexGrow={1}>
+            <span style={{ fg: nameColor(), attributes: props.isFocused || props.isCurrent ? BOLD : undefined }}>
+              {" "}{truncName()}
+            </span>
+          </text>
+          <Show when={statusDot()}>
+            <text flexShrink={0}>
+              <span style={{ fg: statusDotColor() }}>{statusDot()}{" "}</span>
             </text>
           </Show>
         </box>
+        {/* Row 2: accent + folder · branch */}
+        <Show when={collapsedInfo()}>
+          <box flexDirection="row">
+            <text style={{ fg: accentColor() }}>{accentChar()}</text>
+            <text truncate>
+              <span style={{ fg: P().overlay0, attributes: DIM }}>{" "}{collapsedInfo()}</span>
+            </text>
+          </box>
+        </Show>
       </box>
 
       {/* Expanded: window/pane tree */}
