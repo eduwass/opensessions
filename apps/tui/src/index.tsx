@@ -1241,50 +1241,66 @@ function SessionCard(props: SessionCardProps) {
       <Show when={props.isFocused && windowData().length > 0}>
         <box flexDirection="column" paddingLeft={3}>
           <For each={windowData()}>
-            {(win, wi) => (
-              <box flexDirection="column" flexShrink={0}>
-                {/* Spacing between windows */}
-                <Show when={props.spacing() > 0}>
-                  <box height={props.spacing()} />
-                </Show>
+            {(win, wi) => {
+              const sp = () => props.spacing();
+              return (
+                <box flexDirection="column" flexShrink={0}>
+                  {/* Spacing before window header */}
+                  <Show when={sp() > 0}>
+                    <box height={sp()} />
+                  </Show>
 
-                {/* Window header: index + name */}
-                <text truncate>
-                  <span style={{ fg: win.active ? P().green : P().overlay0, attributes: win.active ? BOLD : undefined }}>
-                    {String(win.index)}
-                  </span>
-                  <span style={{ fg: win.active ? P().subtext1 : P().overlay0 }}>
-                    {" "}{win.name}
-                  </span>
-                </text>
+                  {/* Window header: index + name */}
+                  <text truncate>
+                    <span style={{ fg: win.active ? P().green : P().overlay0, attributes: win.active ? BOLD : undefined }}>
+                      {String(win.index)}
+                    </span>
+                    <span style={{ fg: win.active ? P().subtext1 : P().overlay0 }}>
+                      {" "}{win.name}
+                    </span>
+                  </text>
 
-                {/* Panes under this window */}
-                <For each={win.panes}>
-                  {(pane, pi) => {
-                    const isLastPane = () => pi() === win.panes.length - 1;
-                    const prefix = () => isLastPane() ? "└ " : "├ ";
+                  {/* Panes under this window */}
+                  <For each={win.panes}>
+                    {(pane, pi) => {
+                      const isLastPane = () => pi() === win.panes.length - 1;
+                      const prefix = () => isLastPane() ? "└ " : "├ ";
+                      const gutter = () => isLastPane() ? "  " : "│ ";
 
-                    return (
-                      <box flexDirection="row"
-                        onMouseDown={() => {
-                          if (pane.type === "dev" && pane.exposedSite) {
-                            props.onFocusExposedPane(pane.exposedSite.port);
-                          } else {
-                            props.onFocusPane(pane.id);
-                          }
-                        }}
-                      >
-                        <text truncate>
-                          <span style={{ fg: P().surface2 }}>{prefix()}</span>
-                          <span style={{ fg: paneDotColor(pane) }}>{paneDot(pane)}</span>
-                          <span style={{ fg: paneLabelColor(pane) }}>{" "}{paneLabel(pane)}</span>
-                        </text>
-                      </box>
-                    );
-                  }}
-                </For>
-              </box>
-            )}
+                      return (
+                        <box flexDirection="column" flexShrink={0}>
+                          {/* Spacer with gutter between panes */}
+                          <Show when={sp() > 0 && pi() > 0}>
+                            <For each={Array.from({ length: sp() })}>
+                              {() => (
+                                <text><span style={{ fg: P().surface2 }}>{gutter()}</span></text>
+                              )}
+                            </For>
+                          </Show>
+
+                          {/* Pane row */}
+                          <box flexDirection="row"
+                            onMouseDown={() => {
+                              if (pane.type === "dev" && pane.exposedSite) {
+                                props.onFocusExposedPane(pane.exposedSite.port);
+                              } else {
+                                props.onFocusPane(pane.id);
+                              }
+                            }}
+                          >
+                            <text truncate>
+                              <span style={{ fg: P().surface2 }}>{prefix()}</span>
+                              <span style={{ fg: paneDotColor(pane) }}>{paneDot(pane)}</span>
+                              <span style={{ fg: paneLabelColor(pane) }}>{" "}{paneLabel(pane)}</span>
+                            </text>
+                          </box>
+                        </box>
+                      );
+                    }}
+                  </For>
+                </box>
+              );
+            }}
           </For>
         </box>
       </Show>
