@@ -1157,10 +1157,13 @@ function SessionCard(props: SessionCardProps) {
                 wt.ports.filter((p) => !wt.exposedSites.some((s) => s.port === p)).length > 0 ||
                 wt.agents.length > 0;
 
+              // Gutter for the spacer line — show │ if not the first worktree
+              const spacerGutter = () => i() === 0 ? "" : (isLast() ? "│" : "│");
+
               return (
                 <box flexDirection="column" flexShrink={0}>
-                  {/* Blank line before each worktree block */}
-                  <box height={1} />
+                  {/* Spacer with continuous gutter line */}
+                  <text><span style={{ fg: P().surface2 }}>{spacerGutter()}</span></text>
 
                   {/* Worktree header: ├─  folder ·  branch +N -N */}
                   <box flexDirection="row">

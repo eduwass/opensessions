@@ -311,12 +311,28 @@ function buildWorktreeContexts(
   if (paneEntries.length === 0) return [];
 
   // Group pane entries by git repo root
-  const byRepoRoot = new Map<string, PaneDirEntry[]>();
+  const byRepoRootRaw = new Map<string, PaneDirEntry[]>();
   for (const entry of paneEntries) {
     const root = getGitRepoRoot(entry.cwd);
-    let list = byRepoRoot.get(root);
-    if (!list) { list = []; byRepoRoot.set(root, list); }
+    let list = byRepoRootRaw.get(root);
+    if (!list) { list = []; byRepoRootRaw.set(root, list); }
     list.push(entry);
+  }
+
+  // Filter out nested repos (submodules) — if root A is inside root B, drop A
+  const allRoots = [...byRepoRootRaw.keys()];
+  const nestedRoots = new Set<string>();
+  for (const root of allRoots) {
+    for (const other of allRoots) {
+      if (root !== other && root.startsWith(other + "/")) {
+        nestedRoots.add(root);
+        break;
+      }
+    }
+  }
+  const byRepoRoot = new Map<string, PaneDirEntry[]>();
+  for (const [root, entries] of byRepoRootRaw) {
+    if (!nestedRoots.has(root)) byRepoRoot.set(root, entries);
   }
 
   // Build paneId→repoRoot for mapping ports and agents
