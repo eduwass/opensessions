@@ -570,9 +570,14 @@ function App() {
   });
 
   // Periodic refresh when agents are running — picks up title changes for spinner detection
+  // Grace period: keep refreshing for 10s after last running state to avoid flicker on session switch
+  let lastRunningTs = 0;
   createEffect(() => {
-    if (!hasRunning()) return;
+    if (hasRunning()) lastRunningTs = Date.now();
+    const shouldRefresh = hasRunning() || (Date.now() - lastRunningTs < 10000);
+    if (!shouldRefresh) return;
     const interval = setInterval(() => {
+      if (hasRunning()) lastRunningTs = Date.now();
       send({ type: "refresh" });
     }, 2000);
     onCleanup(() => clearInterval(interval));
