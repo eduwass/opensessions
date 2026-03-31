@@ -805,12 +805,6 @@ function App() {
           )}
         </For>
 
-        {/* New session button */}
-        <box paddingLeft={2} paddingTop={1} paddingBottom={1}>
-          <text onMouseDown={() => createNewSession()}>
-            <span style={{ fg: P().overlay0, attributes: DIM }}>{"+ new session"}</span>
-          </text>
-        </box>
       </scrollbox>
       </Show>
 
