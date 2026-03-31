@@ -1252,8 +1252,11 @@ function SessionCard(props: SessionCardProps) {
   // Pane rendering helpers
   // Braille chars U+2800–U+28FF are used as spinner indicators by claude-code and others
   const BRAILLE_RE = /[\u2800-\u28FF]/;
-  const isPaneRunning = (pane: PaneData) =>
-    pane.agentStatus === "running" || (pane.type === "agent" && BRAILLE_RE.test(pane.title.charAt(0)));
+  const TERMINAL_STATUSES = new Set(["done", "error", "interrupted"]);
+  const isPaneRunning = (pane: PaneData) => {
+    if (pane.agentStatus && TERMINAL_STATUSES.has(pane.agentStatus)) return false;
+    return pane.agentStatus === "running" || (pane.type === "agent" && BRAILLE_RE.test(pane.title.charAt(0)));
+  };
 
   const paneDot = (pane: PaneData) => {
     if (pane.type === "agent" && isPaneRunning(pane))
