@@ -756,6 +756,22 @@ function App() {
         </For>
       </scrollbox>
 
+      {/* Settings button — pinned to bottom */}
+      <box flexShrink={0} paddingLeft={2} paddingBottom={1} paddingTop={0}>
+        <box height={1}>
+          <text style={{ fg: P().surface2 }}>{"─".repeat(200)}</text>
+        </box>
+        <text
+          onMouseDown={() => {
+            themeBeforePreview = theme();
+            setModal("theme-picker");
+          }}
+        >
+          <span style={{ fg: P().overlay0 }}>{"  "}</span>
+          <span style={{ fg: P().overlay0, attributes: DIM }}>{"settings"}</span>
+        </text>
+      </box>
+
       {/* Theme picker overlay */}
       <Show when={modal() === "theme-picker"}>
         <ThemePicker
