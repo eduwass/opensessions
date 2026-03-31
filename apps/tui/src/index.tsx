@@ -1327,15 +1327,14 @@ function SessionCard(props: SessionCardProps) {
                     {(pane, pi) => {
                       const isLastPane = () => pi() === win.panes.length - 1;
                       const tl = () => props.treeLines();
-                      const prefix = () => tl() ? (isLastPane() ? "└ " : "├ ") : "  ";
-                      const gutterChar = () => tl() ? "│" : " ";
+                      const prefix = () => tl() ? (isLastPane() ? "└ " : "├ ") : "";
                       return (
                         <box flexDirection="column" flexShrink={0}>
-                          {/* gutter spacer before each pane */}
-                          <Show when={sp() > 0 && pi() > 0}>
+                          {/* gutter spacer between panes (only with tree lines) */}
+                          <Show when={tl() && sp() > 0 && pi() > 0}>
                             <For each={Array.from({ length: sp() })}>
                               {() => (
-                                <text><span style={{ fg: P().surface2 }}>{gutterChar()}</span></text>
+                                <text><span style={{ fg: P().surface2 }}>{"│"}</span></text>
                               )}
                             </For>
                           </Show>
