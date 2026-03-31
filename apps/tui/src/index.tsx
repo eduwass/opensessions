@@ -186,6 +186,7 @@ function App() {
   const [sidebarWindowBadge, setSidebarWindowBadge] = createSignal(true);
   const [sidebarWindowNumbers, setSidebarWindowNumbers] = createSignal(true);
   const [sidebarCollapseWindows, setSidebarCollapseWindows] = createSignal(false);
+  const [sidebarCollapseSessions, setSidebarCollapseSessions] = createSignal(true);
   const detailPanelSessionName = createMemo(() => focusedSession() ?? mySession());
 
   // --- Panel focus: sessions list vs agent detail ---
@@ -500,6 +501,7 @@ function App() {
             if (msg.sidebarWindowBadge != null) setSidebarWindowBadge(msg.sidebarWindowBadge);
             if (msg.sidebarWindowNumbers != null) setSidebarWindowNumbers(msg.sidebarWindowNumbers);
             if (msg.sidebarCollapseWindows != null) setSidebarCollapseWindows(msg.sidebarCollapseWindows);
+            if (msg.sidebarCollapseSessions != null) setSidebarCollapseSessions(msg.sidebarCollapseSessions);
           } else if (msg.type === "focus") {
             setFocusedSession(msg.focusedSession);
             setCurrentSession(msg.currentSession);
@@ -760,6 +762,7 @@ function App() {
               windowBadge={sidebarWindowBadge}
               windowNumbers={sidebarWindowNumbers}
               collapseWindows={sidebarCollapseWindows}
+              collapseSessions={sidebarCollapseSessions}
               onSelect={() => {
                 setFocusedSession(session.name);
                 send({ type: "focus-session", name: session.name });
@@ -883,11 +886,19 @@ function App() {
               </text>
             </box>
             <box paddingLeft={1}
+              onMouseDown={() => { const v = !sidebarCollapseSessions(); setSidebarCollapseSessions(v); saveConfig({ sidebarCollapseSessions: v }); }}
+            >
+              <text style={{ fg: P().subtext0 }}>
+                <span style={{ fg: sidebarCollapseSessions() ? P().green : P().surface2 }}>{sidebarCollapseSessions() ? "✓ " : "✗ "}</span>
+                <span>{"Collapse sessions"}</span>
+              </text>
+            </box>
+            <box paddingLeft={1}
               onMouseDown={() => { const v = !sidebarCollapseWindows(); setSidebarCollapseWindows(v); saveConfig({ sidebarCollapseWindows: v }); }}
             >
               <text style={{ fg: P().subtext0 }}>
                 <span style={{ fg: sidebarCollapseWindows() ? P().green : P().surface2 }}>{sidebarCollapseWindows() ? "✓ " : "✗ "}</span>
-                <span>{"Collapse inactive"}</span>
+                <span>{"Collapse windows"}</span>
               </text>
             </box>
 
@@ -1128,6 +1139,7 @@ interface SessionCardProps {
   windowBadge: Accessor<boolean>;
   windowNumbers: Accessor<boolean>;
   collapseWindows: Accessor<boolean>;
+  collapseSessions: Accessor<boolean>;
   onSelect: () => void;
   onFocusPane: (paneId: string) => void;
   onFocusExposedPane: (port: number) => void;
@@ -1273,7 +1285,7 @@ function SessionCard(props: SessionCardProps) {
       </box>
 
       {/* Collapsed: folder · branch */}
-      <Show when={!props.isFocused && collapsedInfo()}>
+      <Show when={!props.isFocused && props.collapseSessions() && collapsedInfo()}>
         <box paddingLeft={3}>
           <text truncate>
             <span style={{ fg: P().overlay0, attributes: DIM }}>{collapsedInfo()}</span>
@@ -1282,7 +1294,7 @@ function SessionCard(props: SessionCardProps) {
       </Show>
 
       {/* Expanded: window/pane tree */}
-      <Show when={props.isFocused && windowData().length > 0}>
+      <Show when={(props.isFocused || !props.collapseSessions()) && windowData().length > 0}>
         <box flexDirection="column" paddingLeft={3}>
           <For each={windowData()}>
             {(win, wi) => {

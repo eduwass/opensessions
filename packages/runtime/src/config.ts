@@ -30,6 +30,8 @@ export interface OpensessionsConfig {
   sidebarWindowNumbers?: boolean;
   /** Collapse inactive windows to just header (default false) */
   sidebarCollapseWindows?: boolean;
+  /** Collapse inactive sessions to just name + branch (default true) */
+  sidebarCollapseSessions?: boolean;
 }
 
 const DEFAULTS: OpensessionsConfig = {
