@@ -1274,11 +1274,7 @@ function SessionCard(props: SessionCardProps) {
   };
 
   const paneLabelColor = (pane: PaneData) => {
-    // Active pane: green text
     if (pane.active) return P().green;
-    // Inactive: dim type colors (DIM attribute applied in render)
-    if (pane.type === "dev") return P().blue;
-    if (pane.type === "agent") return P().peach;
     return P().overlay0;
   };
 
