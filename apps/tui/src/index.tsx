@@ -1166,11 +1166,14 @@ function SessionCard(props: SessionCardProps) {
   const windowData = () => props.session.windowData ?? [];
 
   // Pane rendering helpers
+  const isClaudeAgent = (pane: PaneData) =>
+    pane.type === "agent" && pane.command.toLowerCase().includes("claude");
+
   const paneDot = (pane: PaneData) => {
     if (pane.type === "agent" && pane.agentStatus === "running")
-      return SPINNERS[props.spinIdx() % SPINNERS.length]!;
+      return isClaudeAgent(pane) ? "󰯉" : SPINNERS[props.spinIdx() % SPINNERS.length]!;
+    if (pane.type === "agent") return isClaudeAgent(pane) ? "󰯉" : "●";
     if (pane.type === "dev") return "●";
-    if (pane.type === "agent") return "●";
     return "○";
   };
 
