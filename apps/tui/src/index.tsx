@@ -551,8 +551,14 @@ function App() {
     });
   });
 
+  const BRAILLE_RE_GLOBAL = /[\u2800-\u28FF]/;
   const hasRunning = createMemo(() =>
-    sessions.some((s) => s.agentState?.status === "running"),
+    sessions.some((s) =>
+      s.agentState?.status === "running" ||
+      (s.windowData ?? []).some((w) =>
+        w.panes.some((p) => p.type === "agent" && BRAILLE_RE_GLOBAL.test(p.title.charAt(0)))
+      )
+    ),
   );
 
   createEffect(() => {
@@ -560,6 +566,15 @@ function App() {
     const interval = setInterval(() => {
       setSpinIdx((i) => (i + 1) % SPINNERS.length);
     }, 120);
+    onCleanup(() => clearInterval(interval));
+  });
+
+  // Periodic refresh when agents are running — picks up title changes for spinner detection
+  createEffect(() => {
+    if (!hasRunning()) return;
+    const interval = setInterval(() => {
+      send({ type: "refresh" });
+    }, 2000);
     onCleanup(() => clearInterval(interval));
   });
 
@@ -1235,9 +1250,10 @@ function SessionCard(props: SessionCardProps) {
   const windowData = () => props.session.windowData ?? [];
 
   // Pane rendering helpers
-  const BRAILLE_SPINNER_RE = /[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏⠐⠑⠒⠓⠔⠕⠖⠗⠘⠚⠛⠜⠝⠞⠟⠠⠡⠢⠣⠤⠥⠨⠩⠪⠫⠬⠭⠮⠯⠰⠱⠲⠳⠵⠶⠷⠺⠻⠾⠿]/;
+  // Braille chars U+2800–U+28FF are used as spinner indicators by claude-code and others
+  const BRAILLE_RE = /[\u2800-\u28FF]/;
   const isPaneRunning = (pane: PaneData) =>
-    pane.agentStatus === "running" || (pane.type === "agent" && BRAILLE_SPINNER_RE.test(pane.title));
+    pane.agentStatus === "running" || (pane.type === "agent" && BRAILLE_RE.test(pane.title.charAt(0)));
 
   const paneDot = (pane: PaneData) => {
     if (pane.type === "agent" && isPaneRunning(pane))
@@ -1269,8 +1285,11 @@ function SessionCard(props: SessionCardProps) {
     if (pane.type === "dev" && pane.port) {
       return `⌁ ${pane.port}`;
     }
-    const t = pane.title;
+    let t = pane.title;
     if (t && t !== pane.command) {
+      // Strip braille spinners, ✳, ✱ and leading whitespace from title
+      t = t.replace(/^[\u2800-\u28FF✳✱⠶\s]+/, "").trim();
+      if (!t) return pane.command || "shell";
       return t.length > 22 ? t.slice(0, 21) + "…" : t;
     }
     return pane.command || "shell";
