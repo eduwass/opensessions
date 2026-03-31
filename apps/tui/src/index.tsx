@@ -1279,8 +1279,8 @@ function SessionCard(props: SessionCardProps) {
                       const prefix = () => isLastPane() ? "└ " : "├ ";
                       return (
                         <box flexDirection="column" flexShrink={0}>
-                          {/* │ gutter spacer between panes (not before first) */}
-                          <Show when={sp() > 0 && pi() > 0}>
+                          {/* │ gutter spacer before each pane */}
+                          <Show when={sp() > 0}>
                             <For each={Array.from({ length: sp() })}>
                               {() => (
                                 <text><span style={{ fg: P().surface2 }}>{"│"}</span></text>
