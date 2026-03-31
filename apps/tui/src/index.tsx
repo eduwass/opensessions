@@ -1283,7 +1283,7 @@ function SessionCard(props: SessionCardProps) {
       if (isPaneWaiting(pane)) return "◉";
       return "●";
     }
-    if (pane.type === "dev") return "●";
+    if (pane.type === "dev") return "󰒍";
     return "○";
   };
 
