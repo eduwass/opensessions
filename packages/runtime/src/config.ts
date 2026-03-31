@@ -22,6 +22,8 @@ export interface OpensessionsConfig {
   detailPanelHeights?: Record<string, number>;
   /** Vertical spacing between window blocks in the sidebar (0=tight, 1=relaxed, default 1) */
   sidebarSpacing?: number;
+  /** Show tree lines (├ └ │) in the sidebar (default true) */
+  sidebarTreeLines?: boolean;
 }
 
 const DEFAULTS: OpensessionsConfig = {

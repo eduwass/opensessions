@@ -687,8 +687,10 @@ export function startServer(mux: MuxProvider, extraProviders?: MuxProvider[], wa
       focusedSession = sessions.find((s) => s.name === currentSession)?.name ?? sessions[0]!.name;
     }
 
-    const spacing = loadConfig().sidebarSpacing ?? 1;
-    return { type: "state", sessions, focusedSession, currentSession, theme: currentTheme, sidebarWidth, sidebarSpacing: spacing, exposedSites: cachedExposedSites, ts: Date.now() };
+    const cfg = loadConfig();
+    const spacing = cfg.sidebarSpacing ?? 1;
+    const treeLines = cfg.sidebarTreeLines !== false;
+    return { type: "state", sessions, focusedSession, currentSession, theme: currentTheme, sidebarWidth, sidebarSpacing: spacing, sidebarTreeLines: treeLines, exposedSites: cachedExposedSites, ts: Date.now() };
   }
 
   // --- Exposed sites ---

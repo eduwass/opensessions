@@ -182,6 +182,7 @@ function App() {
   const [isDetailResizing, setIsDetailResizing] = createSignal(false);
   const [exposedSites, setExposedSites] = createSignal<ExposedSite[]>([]);
   const [sidebarSpacing, setSidebarSpacing] = createSignal(1);
+  const [sidebarTreeLines, setSidebarTreeLines] = createSignal(true);
   const detailPanelSessionName = createMemo(() => focusedSession() ?? mySession());
 
   // --- Panel focus: sessions list vs agent detail ---
@@ -492,6 +493,7 @@ function App() {
             setTheme(resolveTheme(msg.theme));
             if (msg.exposedSites) setExposedSites(msg.exposedSites);
             if (msg.sidebarSpacing != null) setSidebarSpacing(msg.sidebarSpacing);
+            if (msg.sidebarTreeLines != null) setSidebarTreeLines(msg.sidebarTreeLines);
           } else if (msg.type === "focus") {
             setFocusedSession(msg.focusedSession);
             setCurrentSession(msg.currentSession);
@@ -753,6 +755,7 @@ function App() {
               spinIdx={spinIdx}
               theme={theme}
               spacing={sidebarSpacing}
+              treeLines={sidebarTreeLines}
               onSelect={() => {
                 setFocusedSession(session.name);
                 send({ type: "focus-session", name: session.name });
@@ -793,6 +796,18 @@ function App() {
             onMouseDown={() => setModal("spacing-picker")}
           >
             <span style={{ fg: P().overlay0, attributes: DIM }}>{"spacing"}</span>
+          </text>
+          <text>
+            <span style={{ fg: P().surface2 }}>{" · "}</span>
+          </text>
+          <text
+            onMouseDown={() => {
+              const next = !sidebarTreeLines();
+              setSidebarTreeLines(next);
+              saveConfig({ sidebarTreeLines: next });
+            }}
+          >
+            <span style={{ fg: P().overlay0, attributes: DIM }}>{sidebarTreeLines() ? "lines ✓" : "lines ✗"}</span>
           </text>
         </box>
       </box>
@@ -1089,6 +1104,7 @@ interface SessionCardProps {
   spinIdx: Accessor<number>;
   theme: Accessor<Theme>;
   spacing: Accessor<number>;
+  treeLines: Accessor<boolean>;
   onSelect: () => void;
   onFocusPane: (paneId: string) => void;
   onFocusExposedPane: (port: number) => void;
@@ -1277,14 +1293,16 @@ function SessionCard(props: SessionCardProps) {
                   <For each={win.panes}>
                     {(pane, pi) => {
                       const isLastPane = () => pi() === win.panes.length - 1;
-                      const prefix = () => isLastPane() ? "└ " : "├ ";
+                      const tl = () => props.treeLines();
+                      const prefix = () => tl() ? (isLastPane() ? "└ " : "├ ") : "  ";
+                      const gutterChar = () => tl() ? "│" : " ";
                       return (
                         <box flexDirection="column" flexShrink={0}>
-                          {/* │ gutter spacer before each pane */}
-                          <Show when={sp() > 0}>
+                          {/* gutter spacer before each pane */}
+                          <Show when={sp() > 0 && pi() > 0}>
                             <For each={Array.from({ length: sp() })}>
                               {() => (
-                                <text><span style={{ fg: P().surface2 }}>{"│"}</span></text>
+                                <text><span style={{ fg: P().surface2 }}>{gutterChar()}</span></text>
                               )}
                             </For>
                           </Show>

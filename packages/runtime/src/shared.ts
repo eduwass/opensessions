@@ -70,6 +70,7 @@ export interface ServerState {
   theme: string | undefined;
   sidebarWidth: number;
   sidebarSpacing: number;
+  sidebarTreeLines: boolean;
   exposedSites: ExposedSite[];
   ts: number;
 }
