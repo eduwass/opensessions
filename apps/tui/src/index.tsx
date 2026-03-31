@@ -1295,9 +1295,7 @@ function SessionCard(props: SessionCardProps) {
 
   const paneLabel = (pane: PaneData) => {
     if (pane.type === "dev" && pane.exposedSite) {
-      const d = pane.exposedSite.domain;
-      const domain = d.length > 18 ? d.slice(0, 17) + "…" : d;
-      return `:${pane.port} ${domain}`;
+      return `:${pane.port} ${pane.exposedSite.name}`;
     }
     if (pane.type === "dev" && pane.port) {
       return `⌁ ${pane.port}`;
@@ -1435,7 +1433,7 @@ function SessionCard(props: SessionCardProps) {
                           </Show>
 
                           {/* Pane row */}
-                          <box flexDirection="row"
+                          <box flexDirection="column"
                             onMouseDown={() => props.onFocusPane(pane.id)}
                           >
                             <text truncate>
@@ -1445,6 +1443,13 @@ function SessionCard(props: SessionCardProps) {
                                 {" "}{paneLabel(pane)}
                               </span>
                             </text>
+                            {/* Dev server URL on second line (clickable in Ghostty) */}
+                            <Show when={pane.type === "dev" && pane.exposedSite}>
+                              <text>
+                                <span style={{ fg: P().surface2 }}>{tl() ? (isLastPane() ? "  " : "│ ") : "  "}</span>
+                                <span style={{ fg: P().blue, attributes: DIM }}>{"  https://"}{pane.exposedSite!.domain}</span>
+                              </text>
+                            </Show>
                           </box>
                         </box>
                       );
