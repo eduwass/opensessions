@@ -1,7 +1,7 @@
 import type { AgentStatus, AgentEvent } from "./contracts/agent";
 import type { MuxSessionInfo } from "./contracts/mux";
 
-export const SERVER_PORT = 7391;
+export const SERVER_PORT = Number(process.env.OPENSESSIONS_PORT) || 7391;
 export const SERVER_HOST = "127.0.0.1";
 export const PID_FILE = "/tmp/opensessions.pid";
 export const SERVER_IDLE_TIMEOUT_MS = 30_000;
