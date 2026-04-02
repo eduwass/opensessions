@@ -96,7 +96,15 @@ export class TmuxProvider implements MuxProviderV1, WindowCapable, SidebarCapabl
     const refreshCmd = hookPost("/refresh");
     const ensureCmd = hookPost("/ensure-sidebar", "#{client_tty}|#{session_name}|#{window_id}");
 
-    const clientResizedCmd = hookPost("/client-resized");
+    // Synchronous variant for latency-critical hooks — blocks tmux until
+    // the server responds, so the resize takes effect before the next render.
+    // Includes a short curl timeout to avoid freezing if the server is down.
+    const hookPostSync = (path: string, data?: string) => {
+      const body = data ? ` -d '${data}'` : "";
+      return `run-shell "curl -s --connect-timeout 0.2 --max-time 0.5 -o /dev/null -X POST ${base}${path}${body} >/dev/null 2>&1 || true"`;
+    };
+
+    const clientResizedCmd = hookPostSync("/client-resized");
 
     // client-session-changed: update focus AND ensure sidebar in the new session's window
     tmux.setGlobalHook("client-session-changed", `${focusCmd} ; ${ensureCmd}`);
@@ -105,7 +113,8 @@ export class TmuxProvider implements MuxProviderV1, WindowCapable, SidebarCapabl
     tmux.setGlobalHook("after-select-window", `${refreshCmd} ; ${ensureCmd}`);
     tmux.setGlobalHook("after-select-pane", refreshCmd);
     tmux.setGlobalHook("after-new-window", ensureCmd);
-    // client-resized: terminal window changed size — enforce stored width back
+    // client-resized: terminal window changed size — enforce stored width
+    // synchronously to prevent sidebar flash during proportional resize
     tmux.setGlobalHook("client-resized", clientResizedCmd);
     // pane-exited: a pane closed — kill orphaned sidebar panes (only pane left in window)
     const paneExitedCmd = hookPost("/pane-exited");

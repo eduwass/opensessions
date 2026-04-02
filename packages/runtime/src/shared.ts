@@ -141,6 +141,7 @@ export interface SessionMetadata {
 export type ClientCommand =
   | { type: "switch-session"; name: string; clientTty?: string }
   | { type: "switch-index"; index: number }
+  | { type: "switch-relative"; delta: -1 | 1 }
   | { type: "new-session" }
   | { type: "hide-session"; name: string }
   | { type: "show-all-sessions" }

@@ -988,6 +988,37 @@ export function startServer(mux: MuxProvider, extraProviders?: MuxProvider[], wa
     }
   }
 
+  function switchRelative(delta: -1 | 1, clientTty?: string): void {
+    if (!lastState) {
+      broadcastState();
+    }
+    if (!lastState || lastState.sessions.length === 0) return;
+
+    const current = getCurrentSession();
+    if (!current) return;
+
+    const idx = lastState.sessions.findIndex((s) => s.name === current);
+    if (idx === -1) return;
+
+    const newIdx = idx + delta;
+    // Wrap around
+    const wrapped = ((newIdx % lastState.sessions.length) + lastState.sessions.length) % lastState.sessions.length;
+
+    const name = lastState.sessions[wrapped]!.name;
+    const p = sessionProviders.get(name) ?? mux;
+    p.switchSession(name, clientTty);
+
+    if (sidebarVisible && isFullSidebarCapable(p) && p.name === "zellij") {
+      const activeWindows = p.listActiveWindows();
+      const targetWindow = activeWindows.find((w) => w.sessionName === name);
+      if (targetWindow) {
+        setTimeout(() => {
+          ensureSidebarInWindow(p, { session: name, windowId: targetWindow.id });
+        }, 500);
+      }
+    }
+  }
+
   // --- Sidebar management ---
 
   function getProvidersWithSidebar() {
@@ -1866,6 +1897,14 @@ export function startServer(mux: MuxProvider, extraProviders?: MuxProvider[], wa
         switchToVisibleIndex(cmd.index, tty);
         break;
       }
+      case "switch-relative": {
+        const tty2 = (() => {
+          const cs = clientSessionNames.get(ws);
+          return (cs ? clientTtyBySession.get(cs) : undefined) ?? clientTtys.get(ws);
+        })();
+        switchRelative(cmd.delta, tty2);
+        break;
+      }
       case "new-session":
         mux.createSession();
         broadcastState();
@@ -2094,6 +2133,20 @@ export function startServer(mux: MuxProvider, extraProviders?: MuxProvider[], wa
           const ctx = parseContext(body) ?? undefined;
           log("http", "POST /switch-index", { index, ctx });
           switchToVisibleIndex(index, ctx?.clientTty);
+        } catch {}
+        return new Response("ok", { status: 200 });
+      }
+
+      if (req.method === "POST" && url.pathname === "/switch-relative") {
+        try {
+          const delta = Number.parseInt(url.searchParams.get("delta") ?? "", 10);
+          if (delta !== -1 && delta !== 1) {
+            return new Response("delta must be -1 or 1", { status: 400 });
+          }
+          const body = await req.text();
+          const ctx = parseContext(body) ?? undefined;
+          log("http", "POST /switch-relative", { delta, ctx });
+          switchRelative(delta, ctx?.clientTty);
         } catch {}
         return new Response("ok", { status: 200 });
       }
