@@ -1849,6 +1849,13 @@ export function startServer(mux: MuxProvider, extraProviders?: MuxProvider[], wa
         clientTtys.set(ws, cmd.clientTty);
         break;
       case "switch-session": {
+        // Block session switching when multiple tmux clients are attached (multi-window mode)
+        const clientCount = Number(shell(["tmux", "list-clients", "-F", "#{client_name}"]).split("\n").filter(Boolean).length);
+        if (clientCount > 1) {
+          log("switch-session", "BLOCKED — multiple clients attached", { clientCount });
+          break;
+        }
+
         // Resolve TTY: hook-derived (authoritative) > client-provided > stored
         const clientSess = clientSessionNames.get(ws);
         const tty = (clientSess ? clientTtyBySession.get(clientSess) : undefined)

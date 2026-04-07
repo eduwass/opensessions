@@ -512,11 +512,12 @@ function App() {
           } else if (msg.type === "your-session") {
             setMySession(msg.name);
             setCurrentSession(msg.name);
+            // Always sync focus to our own session — keeps windows expanded
+            setFocusedSession(msg.name);
             if (msg.clientTty) setClientTty(msg.clientTty);
 
             if (!startupFocusSynced && sessions.some((session) => session.name === msg.name)) {
               startupFocusSynced = true;
-              setFocusedSession(msg.name);
               if (focusedSession() !== msg.name) {
                 startupFocusToPublish = msg.name;
               }
