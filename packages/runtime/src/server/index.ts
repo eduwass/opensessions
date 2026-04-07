@@ -787,7 +787,11 @@ export function startServer(mux: MuxProvider, extraProviders?: MuxProvider[], wa
     const collapseWindows = cfg.sidebarCollapseWindows === true;
     const collapseSessions = cfg.sidebarCollapseSessions !== false;
     const highlightSession = cfg.sidebarHighlightSession !== false;
-    return { type: "state", sessions, focusedSession, currentSession, theme: currentTheme, sidebarWidth, sidebarSpacing: spacing, sidebarTreeLines: treeLines, sidebarWindowBadge: windowBadge, sidebarWindowNumbers: windowNumbers, sidebarCollapseWindows: collapseWindows, sidebarCollapseSessions: collapseSessions, sidebarHighlightSession: highlightSession, exposedSites: cachedExposedSites, ts: Date.now() };
+    // Compute occupied sessions (sessions other clients are viewing) for multi-window guard
+    const clientSessionList = shell(["tmux", "list-clients", "-F", "#{session_name}"]).split("\n").filter(Boolean);
+    const occupiedSessions = clientSessionList.length > 1 ? [...new Set(clientSessionList)] : undefined;
+
+    return { type: "state", sessions, focusedSession, currentSession, theme: currentTheme, sidebarWidth, sidebarSpacing: spacing, sidebarTreeLines: treeLines, sidebarWindowBadge: windowBadge, sidebarWindowNumbers: windowNumbers, sidebarCollapseWindows: collapseWindows, sidebarCollapseSessions: collapseSessions, sidebarHighlightSession: highlightSession, exposedSites: cachedExposedSites, occupiedSessions, ts: Date.now() };
   }
 
   // --- Exposed sites ---
@@ -1853,11 +1857,7 @@ export function startServer(mux: MuxProvider, extraProviders?: MuxProvider[], wa
         const clientSessions = shell(["tmux", "list-clients", "-F", "#{session_name}"]).split("\n").filter(Boolean);
         if (clientSessions.length > 1 && clientSessions.includes(cmd.name)) {
           log("switch-session", "BLOCKED — another client is viewing target session", { target: cmd.name, clientSessions });
-          // Tell the TUI to revert its optimistic update
-          const mySession = clientSessionNames.get(ws);
-          if (mySession) {
-            ws.send(JSON.stringify({ type: "switch-blocked", revertTo: mySession }));
-          }
+          shell(["tmux", "display-message", `⚠ "${cmd.name}" is open in another window`]);
           break;
         }
 

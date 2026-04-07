@@ -77,6 +77,8 @@ export interface ServerState {
   sidebarCollapseSessions: boolean;
   sidebarHighlightSession: boolean;
   exposedSites: ExposedSite[];
+  /** Sessions that other tmux clients are currently viewing (multi-window mode) */
+  occupiedSessions?: string[];
   ts: number;
 }
 

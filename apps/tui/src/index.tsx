@@ -188,6 +188,12 @@ function App() {
   const [sidebarCollapseWindows, setSidebarCollapseWindows] = createSignal(false);
   const [sidebarCollapseSessions, setSidebarCollapseSessions] = createSignal(true);
   const [sidebarHighlightSession, setSidebarHighlightSession] = createSignal(true);
+  const [occupiedSessions, setOccupiedSessions] = createSignal<string[]>([]);
+  const isOccupied = (name: string) => {
+    const occupied = occupiedSessions();
+    const my = mySession();
+    return occupied.length > 0 && occupied.includes(name) && name !== my;
+  };
   const detailPanelSessionName = createMemo(() => focusedSession() ?? mySession());
 
   // --- Panel focus: sessions list vs agent detail ---
@@ -503,6 +509,8 @@ function App() {
             if (msg.sidebarCollapseWindows != null) setSidebarCollapseWindows(msg.sidebarCollapseWindows);
             if (msg.sidebarCollapseSessions != null) setSidebarCollapseSessions(msg.sidebarCollapseSessions);
             if (msg.sidebarHighlightSession != null) setSidebarHighlightSession(msg.sidebarHighlightSession);
+            if (msg.occupiedSessions) setOccupiedSessions(msg.occupiedSessions);
+            else setOccupiedSessions([]);
           } else if (msg.type === "focus") {
             // Don't override local focus from server — each TUI manages its own
             setCurrentSession(mySession() ?? msg.currentSession);
@@ -695,7 +703,7 @@ function App() {
           activateFocusedAgent();
         } else {
           const focused = focusedSession();
-          if (focused) switchToSession(focused);
+          if (focused && !isOccupied(focused)) switchToSession(focused);
         }
         break;
       }
@@ -788,10 +796,13 @@ function App() {
               collapseWindows={sidebarCollapseWindows}
               collapseSessions={sidebarCollapseSessions}
               highlightSession={sidebarHighlightSession}
+              isOccupied={isOccupied(session.name)}
               onSelect={() => {
                 setFocusedSession(session.name);
                 send({ type: "focus-session", name: session.name });
-                switchToSession(session.name);
+                if (!isOccupied(session.name)) {
+                  switchToSession(session.name);
+                }
               }}
               onFocusPane={(paneId) => {
                 send({ type: "focus-pane", paneId, session: session.name });
@@ -1180,6 +1191,7 @@ interface SessionCardProps {
   collapseWindows: Accessor<boolean>;
   collapseSessions: Accessor<boolean>;
   highlightSession: Accessor<boolean>;
+  isOccupied?: boolean;
   onSelect: () => void;
   onFocusPane: (paneId: string) => void;
   onFocusExposedPane: (port: number) => void;
@@ -1237,6 +1249,7 @@ function SessionCard(props: SessionCardProps) {
   };
 
   const nameColor = () => {
+    if (props.isOccupied) return P().overlay0;
     if (props.isFocused) return P().text;
     if (props.isCurrent) return P().subtext1;
     return P().subtext0;
@@ -1332,7 +1345,12 @@ function SessionCard(props: SessionCardProps) {
               {" "}{truncName()}
             </span>
           </text>
-          <Show when={statusDot()}>
+          <Show when={props.isOccupied}>
+            <text flexShrink={0}>
+              <span style={{ fg: P().overlay0, attributes: DIM }}>{"󰖲 "}</span>
+            </text>
+          </Show>
+          <Show when={!props.isOccupied && statusDot()}>
             <text flexShrink={0}>
               <span style={{ fg: statusDotColor() }}>{statusDot()}{" "}</span>
             </text>
