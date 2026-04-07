@@ -493,8 +493,10 @@ function App() {
             }
 
             setSessions(reconcile(msg.sessions, { key: "name" }));
-            setFocusedSession(startupFocus);
-            setCurrentSession(msg.currentSession);
+            // Only accept server focus on startup — after that, manage locally
+            if (!startupFocusSynced) setFocusedSession(startupFocus);
+            // Use our own session as current, fall back to server's
+            setCurrentSession(mySession() ?? msg.currentSession);
             setTheme(resolveTheme(msg.theme));
             if (msg.exposedSites) setExposedSites(msg.exposedSites);
             if (msg.sidebarSpacing != null) setSidebarSpacing(msg.sidebarSpacing);
@@ -505,10 +507,11 @@ function App() {
             if (msg.sidebarCollapseSessions != null) setSidebarCollapseSessions(msg.sidebarCollapseSessions);
             if (msg.sidebarHighlightSession != null) setSidebarHighlightSession(msg.sidebarHighlightSession);
           } else if (msg.type === "focus") {
-            setFocusedSession(msg.focusedSession);
-            setCurrentSession(msg.currentSession);
+            // Don't override local focus from server — each TUI manages its own
+            setCurrentSession(mySession() ?? msg.currentSession);
           } else if (msg.type === "your-session") {
             setMySession(msg.name);
+            setCurrentSession(msg.name);
             if (msg.clientTty) setClientTty(msg.clientTty);
 
             if (!startupFocusSynced && sessions.some((session) => session.name === msg.name)) {

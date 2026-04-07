@@ -515,6 +515,14 @@ export function startServer(mux: MuxProvider, extraProviders?: MuxProvider[], wa
   let currentTheme: string | undefined = typeof config.theme === "string" ? config.theme : undefined;
   let sidebarWidth = clampSidebarWidth(config.sidebarWidth ?? 26);
   let sidebarPosition: "left" | "right" = config.sidebarPosition ?? "left";
+  // Per-session sidebar visibility — each session toggles independently
+  const sidebarVisibleSessions = new Set<string>();
+  // Convenience helpers
+  function isSidebarVisible(session?: string): boolean {
+    if (!session) return sidebarVisibleSessions.size > 0;
+    return sidebarVisibleSessions.has(session);
+  }
+  /** @deprecated compat — true if ANY session has sidebar visible */
   let sidebarVisible = false;
   // Track panes that user has seen (by paneId) — cleared when pane starts running again
   const seenPanes = new Set<string>();
@@ -1082,30 +1090,39 @@ export function startServer(mux: MuxProvider, extraProviders?: MuxProvider[], wa
       return;
     }
 
+    const targetSession = ctx?.session ?? getCurrentSession();
     invalidateSidebarPaneCache();
-    if (sidebarVisible) {
+
+    if (targetSession && sidebarVisibleSessions.has(targetSession)) {
+      // Hide sidebar only in the target session
       for (const p of providers) {
-        const panes = p.listSidebarPanes();
-        log("toggle", "OFF — hiding panes", { provider: p.name, count: panes.length });
+        const panes = p.listSidebarPanes(targetSession);
+        log("toggle", "OFF — hiding panes", { provider: p.name, session: targetSession, count: panes.length });
         for (const pane of panes) {
           p.hideSidebar(pane.paneId);
         }
       }
-      sidebarVisible = false;
+      sidebarVisibleSessions.delete(targetSession);
+      sidebarVisible = sidebarVisibleSessions.size > 0;
     } else {
+      if (targetSession) sidebarVisibleSessions.add(targetSession);
       sidebarVisible = true;
       setPendingEnforcement();
       for (const p of providers) {
+        // Only spawn in the target session's windows, not all windows
         const allWindows = p.listActiveWindows();
-        log("toggle", "ON — spawning in active windows", { provider: p.name, count: allWindows.length });
-        for (const w of allWindows) {
+        const windows = targetSession
+          ? allWindows.filter((w) => w.sessionName === targetSession)
+          : allWindows;
+        log("toggle", "ON — spawning in session windows", { provider: p.name, session: targetSession, count: windows.length });
+        for (const w of windows) {
           ensureSidebarInWindow(p, { session: w.sessionName, windowId: w.id });
         }
       }
       enforceSidebarWidth();
       server.publish("sidebar", JSON.stringify({ type: "re-identify" }));
     }
-    log("toggle", "done", { sidebarVisible });
+    log("toggle", "done", { session: targetSession, sidebarVisible, visibleSessions: [...sidebarVisibleSessions] });
   }
 
   function ensureSidebarInWindow(provider?: ReturnType<typeof getProvidersWithSidebar>[number], ctx?: { session: string; windowId: string }): void {
@@ -1118,12 +1135,12 @@ export function startServer(mux: MuxProvider, extraProviders?: MuxProvider[], wa
       }
       return providers[0];
     })();
-    if (!p || !sidebarVisible) {
-      log("ensure", "SKIP", { hasProvider: !!p, sidebarVisible });
+    const curSession = ctx?.session ?? getCurrentSession();
+    const sessionVisible = curSession ? isSidebarVisible(curSession) : sidebarVisible;
+    if (!p || !sessionVisible) {
+      log("ensure", "SKIP", { hasProvider: !!p, sessionVisible, session: curSession });
       return;
     }
-
-    const curSession = ctx?.session ?? getCurrentSession();
     if (!curSession) {
       log("ensure", "SKIP — no current session");
       return;
@@ -1202,6 +1219,7 @@ export function startServer(mux: MuxProvider, extraProviders?: MuxProvider[], wa
       p.cleanupSidebar();
     }
     server.publish("sidebar", JSON.stringify({ type: "quit" }));
+    sidebarVisibleSessions.clear();
     sidebarVisible = false;
     cleanup();
     process.exit(0);
@@ -2016,11 +2034,11 @@ export function startServer(mux: MuxProvider, extraProviders?: MuxProvider[], wa
         killAgentPane(cmd.session, cmd.agent, cmd.threadId, cmd.threadName);
         break;
       case "report-width": {
-        if (!sidebarVisible) {
+        const session = clientSessionNames.get(ws) ?? null;
+        if (!isSidebarVisible(session ?? undefined)) {
           break;
         }
         const reported = clampSidebarWidth(cmd.width);
-        const session = clientSessionNames.get(ws) ?? null;
         if (pendingEnforcement) {
           pendingEnforcement = false;
           enforceSidebarWidth();
