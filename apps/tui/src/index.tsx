@@ -216,11 +216,8 @@ function App() {
   }
 
   function switchToSession(name: string) {
-    // Optimistic local update — makes rapid Tab repeat instant by removing
-    // the server/hook round-trip from the next-Tab decision.
-    // The server's focus/state broadcast will reconcile if needed.
-    setCurrentSession(name);
-    setFocusedSession(name);
+    // No optimistic update — let the server confirm or block the switch.
+    // The your-session message will update focus/current on success.
     setPanelFocus("sessions");
     setFocusedAgentIdx(0);
     send({ type: "switch-session", name });

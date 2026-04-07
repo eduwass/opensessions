@@ -5,9 +5,10 @@
 DELTA="${1:?Usage: switch-relative.sh <-1|1>}"
 
 # Block session switching when multiple clients are attached (multi-window mode)
+# Each client stays in its own session — no cross-switching allowed
 CLIENT_COUNT=$(tmux list-clients -F '#{client_name}' 2>/dev/null | wc -l)
 if [ "$CLIENT_COUNT" -gt 1 ]; then
-  tmux display-message "⚠ session switch disabled — $CLIENT_COUNT windows attached"
+  tmux display-message "⚠ session switch disabled — multiple windows attached"
   exit 0
 fi
 

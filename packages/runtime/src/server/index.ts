@@ -1849,10 +1849,15 @@ export function startServer(mux: MuxProvider, extraProviders?: MuxProvider[], wa
         clientTtys.set(ws, cmd.clientTty);
         break;
       case "switch-session": {
-        // Block session switching when multiple tmux clients are attached (multi-window mode)
-        const clientCount = Number(shell(["tmux", "list-clients", "-F", "#{client_name}"]).split("\n").filter(Boolean).length);
-        if (clientCount > 1) {
-          log("switch-session", "BLOCKED — multiple clients attached", { clientCount });
+        // Block switching to a session another client is already viewing
+        const clientSessions = shell(["tmux", "list-clients", "-F", "#{session_name}"]).split("\n").filter(Boolean);
+        if (clientSessions.length > 1 && clientSessions.includes(cmd.name)) {
+          log("switch-session", "BLOCKED — another client is viewing target session", { target: cmd.name, clientSessions });
+          // Tell the TUI to revert its optimistic update
+          const mySession = clientSessionNames.get(ws);
+          if (mySession) {
+            ws.send(JSON.stringify({ type: "switch-blocked", revertTo: mySession }));
+          }
           break;
         }
 
